@@ -54,10 +54,9 @@ impl HoistStrategy for AgentSkillsStrategy {
                 .with_context(|| format!("getting name for {}", path.display()))?
                 .to_string();
 
-            let is_dir_skill =
-                path.is_dir() && path.join("SKILL.md").is_file();
-            let is_flat_skill = path.is_file()
-                && path.extension().and_then(|s| s.to_str()) == Some("md");
+            let is_dir_skill = path.is_dir() && path.join("SKILL.md").is_file();
+            let is_flat_skill =
+                path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md");
 
             if !is_dir_skill && !is_flat_skill {
                 continue;
