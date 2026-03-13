@@ -1,10 +1,16 @@
 # scaffold
 
-Assemble self-contained, symlinked monorepo workspaces from a single JSON blueprint.
+Compose multi-repo development environments and manage AI agent artifacts across them.
 
 ## The Problem
 
-Working across multiple related repos is painful: symlinks break when moved, submodules have poor ergonomics, and ad-hoc shell scripts are brittle and hard to share. scaffold builds a portable, reproducible workspace from a single JSON blueprint — clone it once and get a directory tree where every repo is in the right place, sub-dependencies are linked into their parents, and the whole thing moves without breaking.
+Agentic code workflows introduce three problems that existing tools don't solve together:
+
+1. **Project composition** — Large projects often span multiple repos. Assembling them into a coherent dev environment with correct dependency structure is tedious and error-prone.
+2. **Agent artifact discovery** — LLM agents don't reliably discover artifacts like skills and `AGENT.md` files when they're nested in sub-directories across many repos.
+3. **Proprietary agent artifacts** — Agent artifacts sometimes contain proprietary context to be effective. That's a conflict when the artifact lives alongside open-source code.
+
+scaffold addresses all three: `build` assembles repos into a single workspace, `hoist` surfaces agent artifacts to the workspace root where agents can find them, and the blueprint-per-workspace model keeps proprietary agent config separate from source repos.
 
 ## How it Works
 
