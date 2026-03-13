@@ -1,6 +1,7 @@
 mod blueprint;
 mod commands;
 mod git;
+mod hoist;
 mod store;
 
 use clap::{Parser, Subcommand};
@@ -20,12 +21,18 @@ enum Commands {
         /// Path to the blueprint JSON file
         blueprint: String,
     },
+    /// Hoist AI artifacts from workspace repos up to the workspace root
+    Hoist {
+        /// Workspace name or path to blueprint JSON
+        workspace: String,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Commands::Build { blueprint } => commands::build::run(&blueprint)?,
+        Commands::Hoist { workspace } => commands::hoist::run(&workspace)?,
     }
     Ok(())
 }

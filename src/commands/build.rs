@@ -72,6 +72,13 @@ pub fn run(blueprint_path: &str) -> Result<()> {
     // 4. Create symlinks (recursive DFS)
     create_symlinks(&config.dependencies, &bp_dir, None)?;
 
+    // 5. Copy blueprint JSON into workspace root
+    std::fs::copy(blueprint_path, bp_dir.join("blueprint.json"))
+        .with_context(|| format!(
+            "copying blueprint to workspace: {}",
+            bp_dir.join("blueprint.json").display()
+        ))?;
+
     println!("Built '{}' at: {}", config.name, bp_dir.display());
     Ok(())
 }
