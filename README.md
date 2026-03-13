@@ -1,6 +1,6 @@
 # scaffold
 
-Compose multi-repo development environments and manage AI agent artifacts across them.
+🏗️ Compose multi-repo development environments and manage AI agent artifacts across them.
 
 ## The Problem
 
