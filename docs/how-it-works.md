@@ -50,7 +50,7 @@ scaffold uses two kinds of symlinks:
 
 ## Hoist Strategy System
 
-`scaffold hoist` copies AI agent artifacts from individual repos up to the workspace root, namespaced by repo name. This makes workspace-level tooling (e.g. Claude Code) aware of skills and configs defined per-repo.
+`scaffold hoist` symlinks AI agent artifacts from individual repos up to the workspace root, namespaced by repo name. This makes workspace-level tooling (e.g. Claude Code) aware of skills and configs defined per-repo. Using symlinks rather than copies means edits to a skill in a repo are immediately visible through the workspace, and relative path references within a skill directory (e.g. `../hooks/foo.sh`) remain valid because the OS resolves the symlink to the real path before following relative references.
 
 **Detection**: Each hoist strategy scans repos for specific file patterns. A strategy only activates for repos where it detects matching files — repos without relevant files are silently skipped.
 
@@ -58,8 +58,8 @@ scaffold uses two kinds of symlinks:
 
 **Current strategies**
 
-| Strategy | Detects | Copies to |
+| Strategy | Detects | Symlinks to |
 |---|---|---|
 | `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<workspace>/.claude/skills/<repo>-<filename>` |
 
-**Skip behavior**: If a destination file already exists, hoist prints a warning to stderr and skips that file. Running `scaffold update` re-hoists with overwrite enabled, replacing previously hoisted files with the current versions from each repo.
+**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry. Running `scaffold update` re-hoists with overwrite enabled, replacing previously hoisted symlinks with fresh ones pointing to the current versions from each repo.
