@@ -40,17 +40,36 @@ cp target/release/scaffold ~/.local/bin/
 
 ```
 scaffold build <blueprint>
+scaffold hoist <workspace>
 ```
+
+### `scaffold build <blueprint>`
 
 | Argument | Description |
 |---|---|
-| `<blueprint>` | Path to a blueprint JSON file |
+| `<blueprint>` | Path to the blueprint JSON file |
 
 **Environment variables**
 
 | Variable | Description |
 |---|---|
 | `SCAFFOLD_HOME` | Override the default `~/.scaffold` store location |
+
+### `scaffold hoist <workspace>`
+
+Collects AI agent artifacts (e.g. Claude Code skills) from each repo in a built workspace and copies them to the workspace root, namespaced by repo name.
+
+| Argument | Description |
+|---|---|
+| `<workspace>` | Workspace name (directory under cwd) or path to a blueprint JSON file |
+
+Each strategy only activates for repos where it detects relevant files. Currently supported:
+
+| Strategy | Detects | Copies to |
+|---|---|---|
+| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<workspace>/.claude/skills/<repo>-<filename>` |
+
+If a destination file already exists, a warning is printed to stderr and the file is skipped (no overwrite).
 
 ### Example
 
@@ -82,7 +101,7 @@ Given the blueprint below saved as `koa-dev.json`:
 }
 ```
 
-Run:
+Build the workspace:
 
 ```bash
 scaffold build koa-dev.json
@@ -93,6 +112,23 @@ This will:
 2. Create local clones under `./koa-dev/repos/`
 3. Symlink `koa` and `compose` at the `koa-dev/` root
 4. Symlink `router` into `koa/packages/` so it appears as a local package
+5. Copy `koa-dev.json` into `koa-dev/blueprint.json`
+
+Then hoist AI artifacts from each repo up to the workspace root:
+
+```bash
+scaffold hoist koa-dev
+# or equivalently:
+scaffold hoist koa-dev.json
+```
+
+If `koa` and `compose` each have `.claude/skills/test-skill.md`, this produces:
+
+```
+koa-dev/.claude/skills/
+  koa-test-skill.md
+  compose-test-skill.md
+```
 
 ## Blueprint schema
 
