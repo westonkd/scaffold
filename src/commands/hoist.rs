@@ -17,9 +17,7 @@ pub fn run(path: Option<&str>) -> Result<()> {
 
             let repos_dir = cwd.join("repos");
             if !repos_dir.exists() {
-                anyhow::bail!(
-                    "repos/ directory not found.\nIs this a valid scaffold workspace?"
-                );
+                anyhow::bail!("repos/ directory not found.\nIs this a valid scaffold workspace?");
             }
 
             println!("Hoisting from workspace: {}", cwd.display());
@@ -102,9 +100,7 @@ pub fn run(path: Option<&str>) -> Result<()> {
                 let repo_name = resolved_path
                     .file_name()
                     .and_then(|s| s.to_str())
-                    .with_context(|| {
-                        format!("getting repo name for {}", resolved_path.display())
-                    })?
+                    .with_context(|| format!("getting repo name for {}", resolved_path.display()))?
                     .to_string();
 
                 println!("Hoisting from repo: {}", resolved_path.display());

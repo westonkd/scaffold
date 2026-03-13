@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::hoist::HoistStrategy;
+use crate::store::relative_path;
 
 pub struct AgentSkillsStrategy;
 
@@ -18,8 +19,11 @@ impl HoistStrategy for AgentSkillsStrategy {
         std::fs::read_dir(&skills_dir)
             .map(|entries| {
                 entries.filter_map(|e| e.ok()).any(|e| {
-                    e.path().is_file()
-                        && e.path().extension().and_then(|s| s.to_str()) == Some("md")
+                    let path = e.path();
+                    // Flat .md file directly in skills/
+                    (path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md"))
+                        // Directory-based skill containing a SKILL.md
+                        || (path.is_dir() && path.join("SKILL.md").is_file())
                 })
             })
             .unwrap_or(false)
@@ -44,30 +48,59 @@ impl HoistStrategy for AgentSkillsStrategy {
         for entry in entries {
             let entry = entry.with_context(|| format!("reading entry in {}", src_dir.display()))?;
             let path = entry.path();
+            let entry_name = path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .with_context(|| format!("getting name for {}", path.display()))?
+                .to_string();
 
-            if !path.is_file() || path.extension().and_then(|s| s.to_str()) != Some("md") {
+            let is_dir_skill = path.is_dir() && path.join("SKILL.md").is_file();
+            let is_flat_skill =
+                path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md");
+
+            if !is_dir_skill && !is_flat_skill {
                 continue;
             }
 
-            let filename = path
-                .file_name()
-                .and_then(|s| s.to_str())
-                .with_context(|| format!("getting filename for {}", path.display()))?;
-
-            let dst_filename = format!("{}-{}", repo_name, filename);
-            let dst_path = dst_dir.join(&dst_filename);
+            let dst_path = dst_dir.join(format!("{}-{}", repo_name, entry_name));
 
             if dst_path.exists() && !force {
                 eprintln!(
                     "warning: skipping '{}' — destination already exists: {}",
-                    filename,
+                    entry_name,
                     dst_path.display()
                 );
                 continue;
             }
 
-            std::fs::copy(&path, &dst_path)
-                .with_context(|| format!("copying {} to {}", path.display(), dst_path.display()))?;
+            // Remove existing destination if force is set
+            if dst_path.exists() {
+                if dst_path.is_dir() {
+                    std::fs::remove_dir_all(&dst_path).with_context(|| {
+                        format!("removing existing destination: {}", dst_path.display())
+                    })?;
+                } else {
+                    std::fs::remove_file(&dst_path).with_context(|| {
+                        format!("removing existing destination: {}", dst_path.display())
+                    })?;
+                }
+            }
+
+            // Also remove a dangling symlink (exists() returns false for broken symlinks)
+            if dst_path.symlink_metadata().is_ok() {
+                std::fs::remove_file(&dst_path).with_context(|| {
+                    format!("removing existing symlink: {}", dst_path.display())
+                })?;
+            }
+
+            let rel_target = relative_path(&dst_dir, &path);
+            std::os::unix::fs::symlink(&rel_target, &dst_path).with_context(|| {
+                format!(
+                    "creating symlink {} -> {}",
+                    dst_path.display(),
+                    rel_target.display()
+                )
+            })?;
         }
 
         Ok(())
