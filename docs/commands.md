@@ -53,13 +53,13 @@ If the resolved path contains a `repos/` subdirectory it is treated as a scaffol
 
 Each strategy only activates for repos where it detects relevant files.
 
-| Strategy | Detects | Copies to |
+| Strategy | Detects | Symlinks to |
 |---|---|---|
 | `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<cwd>/.claude/skills/<repo>-<filename>` |
 
 **Notes**
 
-- If a destination file already exists, a warning is printed to stderr and the file is skipped (no overwrite).
+- If a destination path already exists, a warning is printed to stderr and the entry is skipped (no overwrite).
 - Use `scaffold update` to re-hoist with overwrite enabled.
 
 ---

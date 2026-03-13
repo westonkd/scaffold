@@ -45,7 +45,8 @@ This clones both repos into `~/.scaffold/projects/`, creates local clones under 
 **3. Hoist agent artifacts to the workspace root:**
 
 ```bash
-scaffold hoist koa-dev
+cd koa-dev
+scaffold hoist
 ```
 
 Any agent skills or other artifacts found in each repo are symlinked into `koa-dev/.claude/skills/`, namespaced by repo name (e.g. `koa-test-skill.md`, `compose-test-skill.md`).
