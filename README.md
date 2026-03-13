@@ -12,6 +12,51 @@ Agentic code workflows introduce three problems that existing tools don't solve 
 
 scaffold addresses all three: `build` assembles repos into a single workspace, `hoist` surfaces agent artifacts to the workspace root where agents can find them, and the blueprint-per-workspace model keeps proprietary agent config separate from source repos.
 
+## Quickstart
+
+**1. Write a blueprint file** (e.g. `koa-dev.json`):
+
+```json
+{
+  "name": "koa-dev",
+  "dependencies": [
+    {
+      "name": "koa",
+      "source": "https://github.com/koajs/koa.git",
+      "ref": "master"
+    },
+    {
+      "name": "compose",
+      "source": "https://github.com/koajs/compose.git",
+      "ref": "master"
+    }
+  ]
+}
+```
+
+**2. Build the workspace:**
+
+```bash
+scaffold build koa-dev.json
+```
+
+This clones both repos into `~/.scaffold/projects/`, creates local clones under `koa-dev/repos/`, and symlinks `koa` and `compose` at the workspace root.
+
+**3. Hoist agent artifacts to the workspace root:**
+
+```bash
+scaffold hoist koa-dev
+```
+
+Any agent skills or other artifacts found in each repo are copied to `koa-dev/.claude/skills/`, namespaced by repo name (e.g. `koa-test-skill.md`, `compose-test-skill.md`).
+
+**4. Later, refresh the workspace** (pull all repos and re-hoist):
+
+```bash
+cd koa-dev
+scaffold update
+```
+
 ## How it Works
 
 ```
@@ -41,26 +86,6 @@ All symlinks are relative, so the workspace is fully portable.
 ```bash
 cargo build --release
 cp target/release/scaffold ~/.local/bin/
-```
-
-## Quickstart
-
-Write a blueprint file (e.g. `koa-dev.json`):
-
-```json
-{
-  "name": "koa-dev",
-  "dependencies": [
-    { "name": "koa", "source": "https://github.com/koajs/koa.git", "ref": "master" }
-  ]
-}
-```
-Check out [docs](https://github.com/westonkd/scaffold/blob/main/docs/blueprint-schema.md#example-koa-devjson) for a more complete, realistic example of a blueprint file.
-
-Build the workspace:
-
-```bash
-scaffold build koa-dev.json
 ```
 
 ## Commands
