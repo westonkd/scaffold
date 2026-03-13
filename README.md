@@ -91,7 +91,7 @@ cp target/release/scaffold ~/.local/bin/
 ## Commands
 
 - `scaffold build <blueprint>` — Build a workspace from a blueprint file
-- `scaffold hoist <workspace>` — Collect AI agent artifacts into the workspace root
+- `scaffold hoist [path]` — Collect AI agent artifacts into `cwd`. With no argument, `cwd` must be a scaffold workspace. With an argument, treats `path` as a workspace (if it has a `repos/` directory) or a plain repo, and hoists artifacts into `cwd`.
 - `scaffold update` — Update all repos and re-hoist in an existing workspace
 
 ## Documentation
