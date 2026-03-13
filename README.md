@@ -55,6 +55,7 @@ Write a blueprint file (e.g. `koa-dev.json`):
   ]
 }
 ```
+Check out [docs](https://github.com/westonkd/scaffold/blob/main/docs/blueprint-schema.md#example-koa-devjson) for a more complete, realistic example of a blueprint file.
 
 Build the workspace:
 
