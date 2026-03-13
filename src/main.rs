@@ -26,6 +26,8 @@ enum Commands {
         /// Workspace name or path to blueprint JSON
         workspace: String,
     },
+    /// Update repos and re-hoist artifacts in an existing scaffold workspace
+    Update,
 }
 
 fn main() -> Result<()> {
@@ -33,6 +35,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Build { blueprint } => commands::build::run(&blueprint)?,
         Commands::Hoist { workspace } => commands::hoist::run(&workspace)?,
+        Commands::Update => commands::update::run()?,
     }
     Ok(())
 }

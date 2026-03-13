@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 pub trait HoistStrategy {
     fn name(&self) -> &str;
     fn detect(&self, repo_root: &Path) -> bool;
-    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path) -> Result<()>;
+    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()>;
 }
 
 pub fn all_strategies() -> Vec<Box<dyn HoistStrategy>> {
@@ -15,11 +15,11 @@ pub fn all_strategies() -> Vec<Box<dyn HoistStrategy>> {
     ]
 }
 
-pub fn run_all_strategies(repo_name: &str, repo_root: &Path, workspace_root: &Path) -> Result<()> {
+pub fn run_all_strategies(repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()> {
     for strategy in all_strategies() {
         if strategy.detect(repo_root) {
             println!("  [{}] hoisting from {}", strategy.name(), repo_name);
-            strategy.hoist(repo_name, repo_root, workspace_root)
+            strategy.hoist(repo_name, repo_root, workspace_root, force)
                 .with_context(|| format!(
                     "strategy '{}' failed on repo '{}'",
                     strategy.name(), repo_name
