@@ -22,13 +22,32 @@ Build a workspace from a blueprint file.
 
 ---
 
-## `scaffold hoist <workspace>`
+## `scaffold hoist [path]`
 
-Collects AI agent artifacts (e.g. Claude Code skills) from each repo in a built workspace and copies them to the workspace root, namespaced by repo name.
+Collects AI agent artifacts (e.g. Claude Code skills) and copies them into the current directory, namespaced by repo name.
 
 | Argument | Description |
 |---|---|
-| `<workspace>` | Workspace name (directory under cwd) or path to a blueprint JSON file |
+| `[path]` | *(optional)* Workspace name, absolute/relative path to a workspace or plain repo directory, or path to a blueprint JSON file. If omitted, the current directory is used as the source. |
+
+**Invocation modes**
+
+| Invocation | Source | Destination |
+|---|---|---|
+| `scaffold hoist` | cwd (must be a scaffold workspace) | cwd |
+| `scaffold hoist <path>` | `<path>` (workspace or plain repo) | cwd |
+
+When `<path>` is a name with no slashes, it is resolved relative to cwd. When `<path>` ends with `.json`, it is read as a blueprint file and the workspace name is derived from it.
+
+If the resolved path contains a `repos/` subdirectory it is treated as a scaffold workspace and all repos are hoisted. Otherwise it is treated as a single plain repo.
+
+**Error conditions**
+
+| Condition | Error |
+|---|---|
+| No-arg and `blueprint.json` not in cwd | `blueprint.json not found. Run this command from within a scaffold workspace.` |
+| No-arg and `repos/` not in cwd | `repos/ directory not found. Is this a valid scaffold workspace?` |
+| Path does not exist | `path not found: <path>. Build it first with \`scaffold build\`.` |
 
 **Hoist strategies**
 
@@ -36,7 +55,7 @@ Each strategy only activates for repos where it detects relevant files.
 
 | Strategy | Detects | Copies to |
 |---|---|---|
-| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<workspace>/.claude/skills/<repo>-<filename>` |
+| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<cwd>/.claude/skills/<repo>-<filename>` |
 
 **Notes**
 
