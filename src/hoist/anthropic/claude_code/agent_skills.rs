@@ -18,8 +18,11 @@ impl HoistStrategy for AgentSkillsStrategy {
         std::fs::read_dir(&skills_dir)
             .map(|entries| {
                 entries.filter_map(|e| e.ok()).any(|e| {
-                    e.path().is_file()
-                        && e.path().extension().and_then(|s| s.to_str()) == Some("md")
+                    let path = e.path();
+                    // Flat .md file directly in skills/
+                    (path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md"))
+                        // Directory-based skill containing a SKILL.md
+                        || (path.is_dir() && path.join("SKILL.md").is_file())
                 })
             })
             .unwrap_or(false)
@@ -44,32 +47,73 @@ impl HoistStrategy for AgentSkillsStrategy {
         for entry in entries {
             let entry = entry.with_context(|| format!("reading entry in {}", src_dir.display()))?;
             let path = entry.path();
-
-            if !path.is_file() || path.extension().and_then(|s| s.to_str()) != Some("md") {
-                continue;
-            }
-
-            let filename = path
+            let entry_name = path
                 .file_name()
                 .and_then(|s| s.to_str())
-                .with_context(|| format!("getting filename for {}", path.display()))?;
+                .with_context(|| format!("getting name for {}", path.display()))?
+                .to_string();
 
-            let dst_filename = format!("{}-{}", repo_name, filename);
-            let dst_path = dst_dir.join(&dst_filename);
+            if path.is_dir() && path.join("SKILL.md").is_file() {
+                // Directory-based skill: copy the whole directory as {repo_name}-{skill_dir}/
+                let dst_skill_dir = dst_dir.join(format!("{}-{}", repo_name, entry_name));
 
-            if dst_path.exists() && !force {
-                eprintln!(
-                    "warning: skipping '{}' — destination already exists: {}",
-                    filename,
-                    dst_path.display()
-                );
-                continue;
+                if dst_skill_dir.exists() && !force {
+                    eprintln!(
+                        "warning: skipping '{}' — destination already exists: {}",
+                        entry_name,
+                        dst_skill_dir.display()
+                    );
+                    continue;
+                }
+
+                copy_dir_all(&path, &dst_skill_dir).with_context(|| {
+                    format!(
+                        "copying {} to {}",
+                        path.display(),
+                        dst_skill_dir.display()
+                    )
+                })?;
+            } else if path.is_file()
+                && path.extension().and_then(|s| s.to_str()) == Some("md")
+            {
+                // Flat .md skill file
+                let dst_path = dst_dir.join(format!("{}-{}", repo_name, entry_name));
+
+                if dst_path.exists() && !force {
+                    eprintln!(
+                        "warning: skipping '{}' — destination already exists: {}",
+                        entry_name,
+                        dst_path.display()
+                    );
+                    continue;
+                }
+
+                std::fs::copy(&path, &dst_path).with_context(|| {
+                    format!("copying {} to {}", path.display(), dst_path.display())
+                })?;
             }
-
-            std::fs::copy(&path, &dst_path)
-                .with_context(|| format!("copying {} to {}", path.display(), dst_path.display()))?;
         }
 
         Ok(())
     }
+}
+
+fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+    std::fs::create_dir_all(dst)
+        .with_context(|| format!("creating directory: {}", dst.display()))?;
+    for entry in
+        std::fs::read_dir(src).with_context(|| format!("reading directory: {}", src.display()))?
+    {
+        let entry = entry.with_context(|| format!("reading entry in {}", src.display()))?;
+        let src_path = entry.path();
+        let dst_path = dst.join(entry.file_name());
+        if src_path.is_dir() {
+            copy_dir_all(&src_path, &dst_path)?;
+        } else {
+            std::fs::copy(&src_path, &dst_path).with_context(|| {
+                format!("copying {} to {}", src_path.display(), dst_path.display())
+            })?;
+        }
+    }
+    Ok(())
 }
