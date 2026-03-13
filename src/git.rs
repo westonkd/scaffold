@@ -1,5 +1,5 @@
-use std::path::Path;
 use anyhow::{Context, Result};
+use std::path::Path;
 
 fn git(args: &[&str], cwd: Option<&Path>) -> Result<()> {
     let mut cmd = std::process::Command::new("git");
@@ -17,16 +17,18 @@ fn git(args: &[&str], cwd: Option<&Path>) -> Result<()> {
 }
 
 pub fn clone(source: &str, dest: &Path) -> Result<()> {
-    git(
-        &["clone", source, dest.to_str().unwrap()],
-        None,
-    )
-    .with_context(|| format!("cloning {} to {}", source, dest.display()))
+    git(&["clone", source, dest.to_str().unwrap()], None)
+        .with_context(|| format!("cloning {} to {}", source, dest.display()))
 }
 
 pub fn clone_local(source: &Path, dest: &Path) -> Result<()> {
     git(
-        &["clone", "--local", source.to_str().unwrap(), dest.to_str().unwrap()],
+        &[
+            "clone",
+            "--local",
+            source.to_str().unwrap(),
+            dest.to_str().unwrap(),
+        ],
         None,
     )
     .with_context(|| format!("local-cloning {} to {}", source.display(), dest.display()))
@@ -38,11 +40,9 @@ pub fn checkout(repo: &Path, ref_: &str) -> Result<()> {
 }
 
 pub fn fetch(repo: &Path) -> Result<()> {
-    git(&["fetch", "origin"], Some(repo))
-        .with_context(|| format!("fetching in {}", repo.display()))
+    git(&["fetch", "origin"], Some(repo)).with_context(|| format!("fetching in {}", repo.display()))
 }
 
 pub fn pull(repo: &Path) -> Result<()> {
-    git(&["pull"], Some(repo))
-        .with_context(|| format!("pulling in {}", repo.display()))
+    git(&["pull"], Some(repo)).with_context(|| format!("pulling in {}", repo.display()))
 }

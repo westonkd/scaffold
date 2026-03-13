@@ -1,5 +1,5 @@
-use std::path::Path;
 use anyhow::{Context, Result};
+use std::path::Path;
 
 use crate::hoist::HoistStrategy;
 
@@ -25,7 +25,13 @@ impl HoistStrategy for AgentSkillsStrategy {
             .unwrap_or(false)
     }
 
-    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()> {
+    fn hoist(
+        &self,
+        repo_name: &str,
+        repo_root: &Path,
+        workspace_root: &Path,
+        force: bool,
+    ) -> Result<()> {
         let src_dir = repo_root.join(".claude").join("skills");
         let dst_dir = workspace_root.join(".claude").join("skills");
 
@@ -60,9 +66,8 @@ impl HoistStrategy for AgentSkillsStrategy {
                 continue;
             }
 
-            std::fs::copy(&path, &dst_path).with_context(|| {
-                format!("copying {} to {}", path.display(), dst_path.display())
-            })?;
+            std::fs::copy(&path, &dst_path)
+                .with_context(|| format!("copying {} to {}", path.display(), dst_path.display()))?;
         }
 
         Ok(())

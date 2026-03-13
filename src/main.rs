@@ -4,11 +4,14 @@ mod git;
 mod hoist;
 mod store;
 
-use clap::{Parser, Subcommand};
 use anyhow::Result;
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "scaffold", about = "Scaffold monorepo workspaces from blueprints")]
+#[command(
+    name = "scaffold",
+    about = "Scaffold monorepo workspaces from blueprints"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,

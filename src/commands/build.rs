@@ -1,16 +1,16 @@
+use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use anyhow::{Context, Result};
 
 use crate::blueprint::{BlueprintConfig, Dependency};
-use crate::store::{relative_path, ScaffoldStore};
 use crate::git;
+use crate::store::{relative_path, ScaffoldStore};
 
 pub fn run(blueprint_path: &str) -> Result<()> {
     let content = std::fs::read_to_string(blueprint_path)
         .with_context(|| format!("reading blueprint file: {}", blueprint_path))?;
-    let config: BlueprintConfig = serde_json::from_str(&content)
-        .with_context(|| "parsing blueprint JSON")?;
+    let config: BlueprintConfig =
+        serde_json::from_str(&content).with_context(|| "parsing blueprint JSON")?;
 
     let store = ScaffoldStore::new();
 
@@ -73,11 +73,12 @@ pub fn run(blueprint_path: &str) -> Result<()> {
     create_symlinks(&config.dependencies, &bp_dir, None)?;
 
     // 5. Copy blueprint JSON into workspace root
-    std::fs::copy(blueprint_path, bp_dir.join("blueprint.json"))
-        .with_context(|| format!(
+    std::fs::copy(blueprint_path, bp_dir.join("blueprint.json")).with_context(|| {
+        format!(
             "copying blueprint to workspace: {}",
             bp_dir.join("blueprint.json").display()
-        ))?;
+        )
+    })?;
 
     println!("Built '{}' at: {}", config.name, bp_dir.display());
     Ok(())
@@ -92,11 +93,7 @@ fn collect_deps(deps: &[Dependency], map: &mut HashMap<String, Dependency>) {
     }
 }
 
-fn create_symlinks(
-    deps: &[Dependency],
-    bp_dir: &Path,
-    parent_name: Option<&str>,
-) -> Result<()> {
+fn create_symlinks(deps: &[Dependency], bp_dir: &Path, parent_name: Option<&str>) -> Result<()> {
     for dep in deps {
         let repos_dir = bp_dir.join("repos");
 
@@ -105,7 +102,11 @@ fn create_symlinks(
                 // Top-level: <bp>/<dep.name> -> repos/<dep.name>
                 let link_path = bp_dir.join(&dep.name);
                 let target = relative_path(bp_dir, &repos_dir.join(&dep.name));
-                println!("Symlinking: {} -> {}", link_path.display(), target.display());
+                println!(
+                    "Symlinking: {} -> {}",
+                    link_path.display(),
+                    target.display()
+                );
                 std::os::unix::fs::symlink(&target, &link_path)
                     .with_context(|| format!("creating symlink {}", link_path.display()))?;
             }
@@ -116,7 +117,11 @@ fn create_symlinks(
                 let link_path = link_dir.join(&dep.name);
                 let target_dir = repos_dir.join(&dep.name);
                 let target = relative_path(&link_dir, &target_dir);
-                println!("Symlinking: {} -> {}", link_path.display(), target.display());
+                println!(
+                    "Symlinking: {} -> {}",
+                    link_path.display(),
+                    target.display()
+                );
                 std::fs::create_dir_all(&link_dir)
                     .with_context(|| format!("creating dir: {}", link_dir.display()))?;
                 std::os::unix::fs::symlink(&target, &link_path)

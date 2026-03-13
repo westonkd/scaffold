@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use anyhow::{Context, Result};
 
 use crate::blueprint::{BlueprintConfig, Dependency};
-use crate::store::ScaffoldStore;
 use crate::git;
 use crate::hoist;
+use crate::store::ScaffoldStore;
 
 pub fn run() -> Result<()> {
     let cwd = std::env::current_dir().with_context(|| "getting current directory")?;
@@ -19,15 +19,13 @@ pub fn run() -> Result<()> {
 
     let repos_dir = cwd.join("repos");
     if !repos_dir.exists() {
-        anyhow::bail!(
-            "repos/ directory not found.\nIs this a valid scaffold workspace?"
-        );
+        anyhow::bail!("repos/ directory not found.\nIs this a valid scaffold workspace?");
     }
 
     let content = std::fs::read_to_string(&blueprint_path)
         .with_context(|| format!("reading blueprint file: {}", blueprint_path.display()))?;
-    let config: BlueprintConfig = serde_json::from_str(&content)
-        .with_context(|| "parsing blueprint JSON")?;
+    let config: BlueprintConfig =
+        serde_json::from_str(&content).with_context(|| "parsing blueprint JSON")?;
 
     let mut unique_repos: HashMap<String, Dependency> = HashMap::new();
     collect_deps(&config.dependencies, &mut unique_repos);
