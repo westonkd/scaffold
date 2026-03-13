@@ -25,7 +25,7 @@ impl HoistStrategy for AgentSkillsStrategy {
             .unwrap_or(false)
     }
 
-    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path) -> Result<()> {
+    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()> {
         let src_dir = repo_root.join(".claude").join("skills");
         let dst_dir = workspace_root.join(".claude").join("skills");
 
@@ -51,7 +51,7 @@ impl HoistStrategy for AgentSkillsStrategy {
             let dst_filename = format!("{}-{}", repo_name, filename);
             let dst_path = dst_dir.join(&dst_filename);
 
-            if dst_path.exists() {
+            if dst_path.exists() && !force {
                 eprintln!(
                     "warning: skipping '{}' — destination already exists: {}",
                     filename,

@@ -50,7 +50,7 @@ pub fn run(workspace: &str) -> Result<()> {
             .with_context(|| format!("getting repo name for {}", repo_root.display()))?
             .to_string();
 
-        hoist::run_all_strategies(&repo_name, &repo_root, &workspace_path)?;
+        hoist::run_all_strategies(&repo_name, &repo_root, &workspace_path, false)?;
     }
 
     Ok(())
