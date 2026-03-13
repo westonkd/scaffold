@@ -25,7 +25,7 @@ docker compose run --rm dev cargo test <test_name>
 
 ## Architecture
 
-`scaffold` is a CLI tool that builds portable, symlinked monorepo workspaces from a JSON blueprint. It has two commands: `scaffold build` and `scaffold hoist`.
+`scaffold` is a CLI tool that builds portable, symlinked monorepo workspaces from a JSON blueprint. It has three commands: `scaffold build`, `scaffold hoist`, and `scaffold update`.
 
 **Execution flow in `commands/build.rs`:**
 1. Parse blueprint JSON (`blueprint.rs`) into `BlueprintConfig` / `Dependency` structs
@@ -38,13 +38,21 @@ docker compose run --rm dev cargo test <test_name>
 **Execution flow in `commands/hoist.rs`:**
 1. Resolve the workspace path — accepts either a workspace name (`koa-dev`) or a path to a blueprint JSON file (`koa-dev.json`)
 2. Iterate each directory under `<workspace>/repos/`
-3. For each repo, run all registered hoist strategies (`hoist::run_all_strategies`)
+3. For each repo, run all registered hoist strategies (`hoist::run_all_strategies(..., force=false)`)
+
+**Execution flow in `commands/update.rs`:**
+1. Read `./blueprint.json` from CWD; bail if not found
+2. Validate `./repos/` exists
+3. Collect all unique repos via `collect_deps()` (same DFS as build)
+4. For each repo, update the global cache (`~/.scaffold/projects/<name>`): `git fetch` + optional `git checkout <ref>` + `git pull` (clones fresh if cache is missing)
+5. For each local clone in `./repos/`: `git fetch` + optional `git checkout <ref>` + `git pull`
+6. Re-hoist all repos with `force=true` (overwrites existing files)
 
 **Hoist strategy system (`src/hoist/`):**
 
 Strategies are namespaced by vendor and agent: `hoist/<vendor>/<agent>/<strategy>.rs`. Each implements the `HoistStrategy` trait:
 - `detect(&Path) -> bool` — return `true` if the strategy applies to this repo
-- `hoist(repo_name, repo_root, workspace_root) -> Result<()>` — perform the copy
+- `hoist(repo_name, repo_root, workspace_root, force: bool) -> Result<()>` — perform the copy; when `force=true`, overwrite existing destination files
 
 Registered in `hoist::all_strategies()`. Currently implemented:
 
@@ -57,15 +65,17 @@ Registered in `hoist::all_strategies()`. Currently implemented:
 - Cache uses `git fetch` + `git pull` on existing clones for efficiency
 - Building refuses to overwrite an existing blueprint directory
 - Hoist strategies are opt-in per repo (detect-then-act); repos with no matching artifacts are silently skipped
-- Hoist skips (with a stderr warning) rather than overwriting existing destination files
+- Hoist skips (with a stderr warning) rather than overwriting existing destination files; `force=true` bypasses this
+- `scaffold update` propagates changes remote → cache → local clone (local clones' origin is the cache, not the remote)
 
 **Module responsibilities:**
-- `main.rs` — clap CLI, `build` and `hoist` subcommands
+- `main.rs` — clap CLI, `build`, `hoist`, and `update` subcommands
 - `blueprint.rs` — serde structs for the JSON config (`ref` field uses `#[serde(rename)]` since it's a Rust keyword)
 - `store.rs` — `ScaffoldStore` (cache path resolution) + `relative_path()` utility with unit tests
 - `git.rs` — thin wrappers around the `git` CLI binary
 - `commands/build.rs` — workspace build orchestration
 - `commands/hoist.rs` — workspace resolution and per-repo strategy dispatch
+- `commands/update.rs` — in-place workspace refresh (cache + local clones + re-hoist)
 - `hoist/mod.rs` — `HoistStrategy` trait, strategy registry, `run_all_strategies()`
 
 ## Blueprint Schema

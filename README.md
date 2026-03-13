@@ -41,6 +41,7 @@ cp target/release/scaffold ~/.local/bin/
 ```
 scaffold build <blueprint>
 scaffold hoist <workspace>
+scaffold update
 ```
 
 ### `scaffold build <blueprint>`
@@ -69,7 +70,7 @@ Each strategy only activates for repos where it detects relevant files. Currentl
 |---|---|---|
 | `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<workspace>/.claude/skills/<repo>-<filename>` |
 
-If a destination file already exists, a warning is printed to stderr and the file is skipped (no overwrite).
+If a destination file already exists, a warning is printed to stderr and the file is skipped (no overwrite). Use `scaffold update` to re-hoist with overwrite.
 
 ### Example
 
@@ -155,7 +156,28 @@ koa-dev/.claude/skills/
 | `path` | no | Relative path inside the parent repo where this dep is symlinked |
 | `dependencies` | no | Nested sub-dependencies (recursive) |
 
+### `scaffold update`
+
+Run from within an existing scaffold workspace (where `blueprint.json` is present). Updates all repos and re-hoists artifacts, overwriting previously hoisted files.
+
+1. Reads `./blueprint.json` in the current directory
+2. Updates each repo in the global cache (`~/.scaffold/projects/`) — fetches from remote and pulls
+3. Updates each local clone in `./repos/` — fetches from the cache and pulls
+4. Re-hoists all artifacts with overwrite enabled
+
+```bash
+cd my-workspace
+scaffold update
+```
+
+**Environment variables**
+
+| Variable | Description |
+|---|---|
+| `SCAFFOLD_HOME` | Override the default `~/.scaffold` store location |
+
 ## Notes
 
 - Running `scaffold build` when `<cwd>/<name>` already exists will exit with an error. Delete or rename that directory before rebuilding.
 - Re-running on an already-cached project will `git fetch` + `git pull` rather than re-cloning.
+- `scaffold update` must be run from the workspace root (the directory containing `blueprint.json` and `repos/`).
