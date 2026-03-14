@@ -2,6 +2,8 @@
 
 🏗️ Compose multi-repo development environments and manage AI agent artifacts across them.
 
+**Scaffold is experimental!** This is a pattern that I'm experimenting with and iterating.
+
 ## The Problem
 
 Agentic code workflows introduce three problems that existing tools don't solve together:
