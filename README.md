@@ -1,104 +1,52 @@
-# scaffold
+# hoist
 
-🏗️ Compose multi-repo development environments and manage AI agent artifacts across them.
+Hoist AI agent artifacts (Claude Code skills, etc.) from repos into your current directory.
 
-**Scaffold is experimental!** This is a pattern that I'm experimenting with and iterating.
+**hoist is experimental!** This is a pattern I'm iterating on.
 
-## The Problem
+## The Problems
 
-Agentic code workflows introduce three problems that existing tools don't solve together:
+**1. Agents don't reliably discover nested artifacts.**
+LLM agents often miss skills, `AGENTS.md` files, and other artifacts when they're buried in sub-directories across many repos. `hoist` surfaces them to a common root where agents can find them consistently.
 
-1. **Project composition** — Large projects often span multiple repos. Assembling them into a coherent dev environment with correct dependency structure is tedious and error-prone.
-2. **Agent artifact discovery** — LLM agents don't reliably discover artifacts like skills and `AGENT.md` files when they're nested in sub-directories across many repos.
-3. **Proprietary agent artifacts** — Agent artifacts sometimes contain proprietary context to be effective. That's a conflict when the artifact lives alongside open-source code.
+**2. Artifacts belong near the code, but may need proprietary context.**
+The most useful agent artifacts are specific to a codebase — but adding proprietary instructions or context to an open-source repo isn't always appropriate. With `hoist`, you can keep those artifacts in a separate closed-source repo and hoist them alongside the OSS code at runtime, keeping source and context cleanly separated.
 
-scaffold addresses all three: `build` assembles repos into a single workspace, `hoist` surfaces agent artifacts to the workspace root where agents can find them, and the blueprint-per-workspace model keeps proprietary agent config separate from source repos.
+## Usage
 
-## Quickstart
+### With a `hoist.json` config
 
-**1. Write a blueprint file** (e.g. `koa-dev.json`):
+Create `hoist.json` in your working directory:
 
 ```json
 {
-  "name": "koa-dev",
-  "dependencies": [
-    {
-      "name": "koa",
-      "source": "https://github.com/koajs/koa.git",
-      "ref": "master"
-    },
-    {
-      "name": "compose",
-      "source": "https://github.com/koajs/compose.git",
-      "ref": "master"
-    }
+  "roots": [
+    "./canvas-lms",
+    "./my-other-repo"
   ]
 }
 ```
 
-**2. Build the workspace:**
+Then run:
 
 ```bash
-scaffold build koa-dev.json
+hoist
 ```
 
-This clones both repos into `~/.scaffold/projects/`, creates local clones under `koa-dev/repos/`, and symlinks `koa` and `compose` at the workspace root.
-
-**3. Hoist agent artifacts to the workspace root:**
+### With a path argument
 
 ```bash
-cd koa-dev
-scaffold hoist
+hoist ./some-repo
 ```
-
-Any agent skills or other artifacts found in each repo are symlinked into `koa-dev/.claude/skills/`, namespaced by repo name (e.g. `koa-test-skill.md`, `compose-test-skill.md`).
-
-**4. Later, refresh the workspace** (pull all repos and re-hoist):
-
-```bash
-cd koa-dev
-scaffold update
-```
-
-## How it Works
-
-```
-~/.scaffold/
-└── projects/               ← git clone cache
-    ├── koa/
-    ├── router/
-    └── compose/
-
-<cwd>/
-└── koa-dev/                ← built workspace
-    ├── repos/              ← local clones (internal)
-    │   ├── koa/
-    │   ├── router/
-    │   └── compose/
-    ├── koa                 → repos/koa      (symlink)
-    └── compose             → repos/compose  (symlink)
-
-# Sub-dependency symlink, relative within repos/:
-repos/koa/packages/router  →  ../../router
-```
-
-All symlinks are relative, so the workspace is fully portable.
 
 ## Installation
 
 ```bash
 cargo build --release
-cp target/release/scaffold ~/.local/bin/
+cp target/release/hoist ~/.local/bin/
 ```
-
-## Commands
-
-- `scaffold build <blueprint>` — Build a workspace from a blueprint file
-- `scaffold hoist [path]` — Collect AI agent artifacts into `cwd`. With no argument, `cwd` must be a scaffold workspace. With an argument, treats `path` as a workspace (if it has a `repos/` directory) or a plain repo, and hoists artifacts into `cwd`.
-- `scaffold update` — Update all repos and re-hoist in an existing workspace
 
 ## Documentation
 
 - [Command reference](docs/commands.md)
-- [Blueprint schema](docs/blueprint-schema.md)
 - [How it works in depth](docs/how-it-works.md)

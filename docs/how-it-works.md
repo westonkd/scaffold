@@ -1,65 +1,46 @@
 # How it Works
 
-## Workspace Layout
+## Overview
 
-```
-~/.scaffold/
-└── projects/               ← git clone cache
-    ├── koa/
-    ├── router/
-    └── compose/
-
-<cwd>/
-└── koa-dev/                ← built workspace
-    ├── repos/              ← local clones (internal)
-    │   ├── koa/
-    │   ├── router/
-    │   └── compose/
-    ├── koa                 → repos/koa      (symlink)
-    └── compose             → repos/compose  (symlink)
-
-# Sub-dependency symlink, relative within repos/:
-repos/koa/packages/router  →  ../../router
-```
-
-Top-level dependencies appear as symlinks directly in the workspace root. Sub-dependencies are linked into their parent's working tree at the path specified by the `path` field in the blueprint.
-
-All symlinks are relative, so the workspace directory is fully portable — move or copy it anywhere and the links remain valid.
-
-## Global Cache
-
-On first build, scaffold clones each repo from its remote URL into `~/.scaffold/projects/<name>/`. This cache is shared across all workspaces.
-
-On subsequent builds (or during `scaffold update`), scaffold runs `git fetch` + `git pull` on the cached clone rather than re-cloning. This keeps builds fast and avoids redundant network traffic.
-
-The cache location can be overridden with the `SCAFFOLD_HOME` environment variable.
-
-## Local Clones
-
-Each workspace gets its own `repos/` directory containing local clones of every repo. These are created with `git clone --local` from the cache, making them fast to create and self-contained — they don't share object storage with the cache or with other workspaces.
-
-The local clones are what you actually work in. The symlinks at the workspace root and within repo trees point into `repos/`.
-
-## Symlink Strategy
-
-scaffold uses two kinds of symlinks:
-
-**Top-level symlinks** — created at the workspace root for each top-level dependency in the blueprint. For example, if `koa` is a top-level dependency, `koa-dev/koa` → `repos/koa`.
-
-**Sub-dependency symlinks** — created inside a parent repo's working tree when a dependency specifies a `path` field. For example, with `"path": "packages"`, scaffold creates `repos/koa/packages/router` → `../../router`. The target path is computed to be relative from the symlink location to the sibling in `repos/`, keeping the link valid regardless of where the workspace lives.
+`hoist` symlinks AI agent artifacts from individual directories up to cwd, namespaced by source directory name. No files are copied — symlinks mean edits in the source are immediately visible, and relative path references within a skill directory remain valid because the OS resolves the symlink to the real path before following relative references.
 
 ## Hoist Strategy System
 
-`scaffold hoist` symlinks AI agent artifacts from individual repos up to the workspace root, namespaced by repo name. This makes workspace-level tooling (e.g. Claude Code) aware of skills and configs defined per-repo. Using symlinks rather than copies means edits to a skill in a repo are immediately visible through the workspace, and relative path references within a skill directory (e.g. `../hooks/foo.sh`) remain valid because the OS resolves the symlink to the real path before following relative references.
+Each hoist strategy is responsible for one type of artifact. Strategies are registered in `hoist::all_strategies()` and run against every root.
 
-**Detection**: Each hoist strategy scans repos for specific file patterns. A strategy only activates for repos where it detects matching files — repos without relevant files are silently skipped.
+**Detection**: A strategy scans the source directory for specific file patterns. If nothing matches, the strategy is silently skipped for that root — no output, no error.
 
-**Namespacing**: Hoisted files are renamed to include the source repo as a prefix (e.g. `koa-test-skill.md`) to avoid collisions between repos that define files with the same name.
+**Namespacing**: Hoisted entries are renamed with the source directory as a prefix (e.g. `canvas-lms-run-specs`) to avoid collisions when multiple roots define entries with the same name.
+
+**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry. Re-run with the destination removed to refresh a symlink.
 
 **Current strategies**
 
 | Strategy | Detects | Symlinks to |
 |---|---|---|
-| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<workspace>/.claude/skills/<repo>-<filename>` |
+| `anthropic/claude_code/agent_skills` | `.claude/skills/` — flat `.md` files or directories containing `SKILL.md` | `<cwd>/.claude/skills/<root>-<entry>` |
 
-**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry. Running `scaffold update` re-hoists with overwrite enabled, replacing previously hoisted symlinks with fresh ones pointing to the current versions from each repo.
+## Symlinks
+
+All symlinks are relative, computed by `utils::relative_path()`. This means the directory structure is fully portable — move or copy the whole tree anywhere and the links remain valid.
+
+For example, hoisting from `canvas-lms/gems/plugins/my-plugin` into `canvas-lms/` produces a symlink like:
+
+```
+canvas-lms/.claude/skills/my-plugin-run-specs
+  → ../../gems/plugins/my-plugin/.claude/skills/run-specs
+```
+
+## Adding a Strategy
+
+Implement the `HoistStrategy` trait in a new file under `src/hoist/<vendor>/<agent>/`:
+
+```rust
+pub trait HoistStrategy {
+    fn name(&self) -> &str;
+    fn detect(&self, repo_root: &Path) -> bool;
+    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()>;
+}
+```
+
+Then register it in `hoist::all_strategies()` in `src/hoist/mod.rs`.

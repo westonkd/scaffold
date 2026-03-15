@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::hoist::HoistStrategy;
-use crate::store::relative_path;
+use crate::utils::relative_path;
 
 pub struct AgentSkillsStrategy;
 

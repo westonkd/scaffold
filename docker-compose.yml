@@ -38,4 +38,4 @@ services:
     volumes:
       - ./dist:/output
     restart: "no"
-    command: sh -c "cp /workspace/target/x86_64-unknown-linux-musl/release/scaffold /output/scaffold"
+    command: sh -c "cp /workspace/target/x86_64-unknown-linux-musl/release/hoist /output/hoist"

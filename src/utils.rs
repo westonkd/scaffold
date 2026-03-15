@@ -1,30 +1,5 @@
 use std::path::PathBuf;
 
-pub struct ScaffoldStore {
-    pub root: PathBuf,
-}
-
-impl ScaffoldStore {
-    pub fn new() -> Self {
-        let root = if let Ok(home) = std::env::var("SCAFFOLD_HOME") {
-            PathBuf::from(home)
-        } else {
-            dirs::home_dir()
-                .expect("could not determine home directory")
-                .join(".scaffold")
-        };
-        Self { root }
-    }
-
-    pub fn projects_dir(&self) -> PathBuf {
-        self.root.join("projects")
-    }
-
-    pub fn project_cache(&self, name: &str) -> PathBuf {
-        self.projects_dir().join(name)
-    }
-}
-
 /// Compute a relative path from `from_dir` to `to`, both absolute.
 ///
 /// Strips the common prefix, emits one `../` per remaining component in
@@ -57,8 +32,6 @@ mod tests {
 
     #[test]
     fn test_relative_path_sibling() {
-        // from: /a/b/c/plugins/   to: /a/b/c/mra/
-        // expected: ../../mra
         let from = Path::new("/a/repos/canvas-lms/gems/plugins");
         let to = Path::new("/a/repos/mra");
         let rel = relative_path(from, to);
