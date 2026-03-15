@@ -1,104 +1,68 @@
-# scaffold
+# hoist
 
-🏗️ Compose multi-repo development environments and manage AI agent artifacts across them.
+Hoist AI agent artifacts (Claude Code skills, etc.) from repos into your current directory.
 
-**Scaffold is experimental!** This is a pattern that I'm experimenting with and iterating.
+**hoist is experimental!** This is a pattern I'm iterating on.
 
 ## The Problem
 
-Agentic code workflows introduce three problems that existing tools don't solve together:
+LLM agents don't reliably discover artifacts like skills and `AGENTS.md` files when they're nested in sub-directories across many repos. `hoist` surfaces those artifacts to a common root where agents can find them.
 
-1. **Project composition** — Large projects often span multiple repos. Assembling them into a coherent dev environment with correct dependency structure is tedious and error-prone.
-2. **Agent artifact discovery** — LLM agents don't reliably discover artifacts like skills and `AGENT.md` files when they're nested in sub-directories across many repos.
-3. **Proprietary agent artifacts** — Agent artifacts sometimes contain proprietary context to be effective. That's a conflict when the artifact lives alongside open-source code.
+## Usage
 
-scaffold addresses all three: `build` assembles repos into a single workspace, `hoist` surfaces agent artifacts to the workspace root where agents can find them, and the blueprint-per-workspace model keeps proprietary agent config separate from source repos.
+### With a `hoist.json` config
 
-## Quickstart
-
-**1. Write a blueprint file** (e.g. `koa-dev.json`):
+Create `hoist.json` in your working directory:
 
 ```json
 {
-  "name": "koa-dev",
-  "dependencies": [
-    {
-      "name": "koa",
-      "source": "https://github.com/koajs/koa.git",
-      "ref": "master"
-    },
-    {
-      "name": "compose",
-      "source": "https://github.com/koajs/compose.git",
-      "ref": "master"
-    }
+  "roots": [
+    "./canvas-lms",
+    "./my-other-repo"
   ]
 }
 ```
 
-**2. Build the workspace:**
+Then run:
 
 ```bash
-scaffold build koa-dev.json
+hoist
 ```
 
-This clones both repos into `~/.scaffold/projects/`, creates local clones under `koa-dev/repos/`, and symlinks `koa` and `compose` at the workspace root.
+Each root is resolved relative to cwd. If a root contains a `repos/` subdirectory it is treated as a workspace (all repos hoisted); otherwise it is treated as a single plain repo.
 
-**3. Hoist agent artifacts to the workspace root:**
+### With a path argument
 
 ```bash
-cd koa-dev
-scaffold hoist
+hoist ./some-repo
 ```
 
-Any agent skills or other artifacts found in each repo are symlinked into `koa-dev/.claude/skills/`, namespaced by repo name (e.g. `koa-test-skill.md`, `compose-test-skill.md`).
+Hoists from the given directory into cwd. If the directory has a `repos/` subdirectory, it is treated as a workspace; otherwise it is treated as a single plain repo.
 
-**4. Later, refresh the workspace** (pull all repos and re-hoist):
+## How Hoisting Works
 
-```bash
-cd koa-dev
-scaffold update
-```
+`hoist` symlinks AI agent artifacts from individual repos up to the current directory, namespaced by repo name. This makes workspace-level tooling (e.g. Claude Code) aware of skills and configs defined per-repo.
 
-## How it Works
+Using symlinks rather than copies means edits to a skill in a repo are immediately visible, and relative path references within a skill directory remain valid.
 
-```
-~/.scaffold/
-└── projects/               ← git clone cache
-    ├── koa/
-    ├── router/
-    └── compose/
+**Namespacing**: Hoisted files are renamed to include the source repo as a prefix (e.g. `canvas-lms-test-skill.md`) to avoid collisions.
 
-<cwd>/
-└── koa-dev/                ← built workspace
-    ├── repos/              ← local clones (internal)
-    │   ├── koa/
-    │   ├── router/
-    │   └── compose/
-    ├── koa                 → repos/koa      (symlink)
-    └── compose             → repos/compose  (symlink)
+**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry.
 
-# Sub-dependency symlink, relative within repos/:
-repos/koa/packages/router  →  ../../router
-```
+### Hoist strategies
 
-All symlinks are relative, so the workspace is fully portable.
+| Strategy | Detects | Symlinks to |
+|---|---|---|
+| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<cwd>/.claude/skills/<repo>-<filename>` |
 
 ## Installation
 
 ```bash
 cargo build --release
-cp target/release/scaffold ~/.local/bin/
+cp target/release/hoist ~/.local/bin/
 ```
-
-## Commands
-
-- `scaffold build <blueprint>` — Build a workspace from a blueprint file
-- `scaffold hoist [path]` — Collect AI agent artifacts into `cwd`. With no argument, `cwd` must be a scaffold workspace. With an argument, treats `path` as a workspace (if it has a `repos/` directory) or a plain repo, and hoists artifacts into `cwd`.
-- `scaffold update` — Update all repos and re-hoist in an existing workspace
 
 ## Documentation
 
 - [Command reference](docs/commands.md)
-- [Blueprint schema](docs/blueprint-schema.md)
 - [How it works in depth](docs/how-it-works.md)

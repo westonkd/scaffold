@@ -1,46 +1,43 @@
 use anyhow::{Context, Result};
+use serde::Deserialize;
 
-use crate::blueprint::BlueprintConfig;
 use crate::hoist;
+
+#[derive(Deserialize)]
+struct HoistConfig {
+    roots: Vec<String>,
+}
 
 pub fn run(path: Option<&str>) -> Result<()> {
     let cwd = std::env::current_dir().with_context(|| "getting current directory")?;
 
     match path {
         None => {
-            // No-arg mode: cwd must be a scaffold workspace
-            if !cwd.join("blueprint.json").exists() {
+            // No-arg mode: read hoist.json from cwd
+            let config_path = cwd.join("hoist.json");
+            if !config_path.exists() {
                 anyhow::bail!(
-                    "blueprint.json not found.\nRun this command from within a scaffold workspace."
+                    "hoist.json not found. Create one or provide a path argument."
                 );
             }
 
-            let repos_dir = cwd.join("repos");
-            if !repos_dir.exists() {
-                anyhow::bail!("repos/ directory not found.\nIs this a valid scaffold workspace?");
-            }
+            let content = std::fs::read_to_string(&config_path)
+                .with_context(|| format!("reading hoist.json: {}", config_path.display()))?;
+            let config: HoistConfig =
+                serde_json::from_str(&content).with_context(|| "parsing hoist.json")?;
 
-            println!("Hoisting from workspace: {}", cwd.display());
+            for root in &config.roots {
+                let root_path = if std::path::Path::new(root).is_absolute() {
+                    std::path::PathBuf::from(root)
+                } else {
+                    cwd.join(root)
+                };
 
-            let entries = std::fs::read_dir(&repos_dir)
-                .with_context(|| format!("reading repos dir: {}", repos_dir.display()))?;
-
-            for entry in entries {
-                let entry =
-                    entry.with_context(|| format!("reading entry in {}", repos_dir.display()))?;
-                let repo_root = entry.path();
-
-                if !repo_root.is_dir() {
-                    continue;
+                if !root_path.exists() {
+                    anyhow::bail!("root not found: {}", root_path.display());
                 }
 
-                let repo_name = repo_root
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .with_context(|| format!("getting repo name for {}", repo_root.display()))?
-                    .to_string();
-
-                hoist::run_all_strategies(&repo_name, &repo_root, &cwd, false)?;
+                hoist_from_root(&root_path, &cwd)?;
             }
 
             Ok(())
@@ -48,13 +45,7 @@ pub fn run(path: Option<&str>) -> Result<()> {
 
         Some(path) => {
             // Explicit-path mode: resolve source, hoist into cwd
-            let resolved_path = if path.ends_with(".json") {
-                let content = std::fs::read_to_string(path)
-                    .with_context(|| format!("reading blueprint file: {}", path))?;
-                let config: BlueprintConfig =
-                    serde_json::from_str(&content).with_context(|| "parsing blueprint JSON")?;
-                cwd.join(&config.name)
-            } else {
+            let resolved_path = {
                 let p = std::path::Path::new(path);
                 if p.is_absolute() {
                     p.to_path_buf()
@@ -64,50 +55,51 @@ pub fn run(path: Option<&str>) -> Result<()> {
             };
 
             if !resolved_path.exists() {
-                anyhow::bail!(
-                    "path not found: {}\nBuild it first with `scaffold build`.",
-                    resolved_path.display()
-                );
+                anyhow::bail!("directory not found: {}", resolved_path.display());
             }
 
-            let repos_dir = resolved_path.join("repos");
-            if repos_dir.exists() {
-                // Workspace mode: iterate repos/, hoist each into cwd
-                println!("Hoisting from workspace: {}", resolved_path.display());
-
-                let entries = std::fs::read_dir(&repos_dir)
-                    .with_context(|| format!("reading repos dir: {}", repos_dir.display()))?;
-
-                for entry in entries {
-                    let entry = entry
-                        .with_context(|| format!("reading entry in {}", repos_dir.display()))?;
-                    let repo_root = entry.path();
-
-                    if !repo_root.is_dir() {
-                        continue;
-                    }
-
-                    let repo_name = repo_root
-                        .file_name()
-                        .and_then(|s| s.to_str())
-                        .with_context(|| format!("getting repo name for {}", repo_root.display()))?
-                        .to_string();
-
-                    hoist::run_all_strategies(&repo_name, &repo_root, &cwd, false)?;
-                }
-            } else {
-                // Single-repo mode: treat resolved_path as a plain repo, hoist into cwd
-                let repo_name = resolved_path
-                    .file_name()
-                    .and_then(|s| s.to_str())
-                    .with_context(|| format!("getting repo name for {}", resolved_path.display()))?
-                    .to_string();
-
-                println!("Hoisting from repo: {}", resolved_path.display());
-                hoist::run_all_strategies(&repo_name, &resolved_path, &cwd, false)?;
-            }
-
-            Ok(())
+            hoist_from_root(&resolved_path, &cwd)
         }
     }
+}
+
+fn hoist_from_root(root: &std::path::Path, cwd: &std::path::Path) -> Result<()> {
+    let repos_dir = root.join("repos");
+    if repos_dir.exists() {
+        // Workspace mode: iterate repos/, hoist each into cwd
+        println!("Hoisting from workspace: {}", root.display());
+
+        let entries = std::fs::read_dir(&repos_dir)
+            .with_context(|| format!("reading repos dir: {}", repos_dir.display()))?;
+
+        for entry in entries {
+            let entry =
+                entry.with_context(|| format!("reading entry in {}", repos_dir.display()))?;
+            let repo_root = entry.path();
+
+            if !repo_root.is_dir() {
+                continue;
+            }
+
+            let repo_name = repo_root
+                .file_name()
+                .and_then(|s| s.to_str())
+                .with_context(|| format!("getting repo name for {}", repo_root.display()))?
+                .to_string();
+
+            hoist::run_all_strategies(&repo_name, &repo_root, cwd, false)?;
+        }
+    } else {
+        // Single-repo mode: treat root as a plain repo, hoist into cwd
+        let repo_name = root
+            .file_name()
+            .and_then(|s| s.to_str())
+            .with_context(|| format!("getting repo name for {}", root.display()))?
+            .to_string();
+
+        println!("Hoisting from repo: {}", root.display());
+        hoist::run_all_strategies(&repo_name, root, cwd, false)?;
+    }
+
+    Ok(())
 }
