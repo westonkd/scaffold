@@ -17,7 +17,15 @@ pub fn run(path: Option<&str>) -> Result<()> {
             let config_path = cwd.join("hoist.json");
             if !config_path.exists() {
                 anyhow::bail!(
-                    "hoist.json not found. Create one or provide a path argument."
+                    "hoist.json not found. To use hoist from this directory:\n\n  \
+                     • Provide a path argument:  hoist ./some-repo\n  \
+                     • Create a hoist.json file:\n\n\
+                     \x20   {{\n\
+                     \x20     \"roots\": [\n\
+                     \x20       \"./canvas-lms\",\n\
+                     \x20       \"./my-other-repo\"\n\
+                     \x20     ]\n\
+                     \x20   }}"
                 );
             }
 
@@ -64,42 +72,12 @@ pub fn run(path: Option<&str>) -> Result<()> {
 }
 
 fn hoist_from_root(root: &std::path::Path, cwd: &std::path::Path) -> Result<()> {
-    let repos_dir = root.join("repos");
-    if repos_dir.exists() {
-        // Workspace mode: iterate repos/, hoist each into cwd
-        println!("Hoisting from workspace: {}", root.display());
+    let repo_name = root
+        .file_name()
+        .and_then(|s| s.to_str())
+        .with_context(|| format!("getting repo name for {}", root.display()))?
+        .to_string();
 
-        let entries = std::fs::read_dir(&repos_dir)
-            .with_context(|| format!("reading repos dir: {}", repos_dir.display()))?;
-
-        for entry in entries {
-            let entry =
-                entry.with_context(|| format!("reading entry in {}", repos_dir.display()))?;
-            let repo_root = entry.path();
-
-            if !repo_root.is_dir() {
-                continue;
-            }
-
-            let repo_name = repo_root
-                .file_name()
-                .and_then(|s| s.to_str())
-                .with_context(|| format!("getting repo name for {}", repo_root.display()))?
-                .to_string();
-
-            hoist::run_all_strategies(&repo_name, &repo_root, cwd, false)?;
-        }
-    } else {
-        // Single-repo mode: treat root as a plain repo, hoist into cwd
-        let repo_name = root
-            .file_name()
-            .and_then(|s| s.to_str())
-            .with_context(|| format!("getting repo name for {}", root.display()))?
-            .to_string();
-
-        println!("Hoisting from repo: {}", root.display());
-        hoist::run_all_strategies(&repo_name, root, cwd, false)?;
-    }
-
-    Ok(())
+    println!("Hoisting from: {}", root.display());
+    hoist::run_all_strategies(&repo_name, root, cwd, false)
 }

@@ -2,18 +2,18 @@
 
 ## `hoist [PATH]`
 
-Hoist AI agent artifacts from repos into the current directory, namespaced by repo name.
+Symlink AI agent artifacts from one or more source directories into cwd, namespaced by source directory name.
 
 | Argument | Description |
 |---|---|
-| `[PATH]` | *(optional)* Path to a workspace or plain repo directory. If omitted, reads `hoist.json` from cwd. |
+| `[PATH]` | *(optional)* Path to a directory to hoist from. If omitted, reads `hoist.json` from cwd. |
 
 **Invocation modes**
 
 | Invocation | Source | Destination |
 |---|---|---|
 | `hoist` | roots listed in `hoist.json` in cwd | cwd |
-| `hoist <path>` | `<path>` (workspace or plain repo) | cwd |
+| `hoist <path>` | `<path>` | cwd |
 
 **hoist.json schema**
 
@@ -26,7 +26,7 @@ Hoist AI agent artifacts from repos into the current directory, namespaced by re
 }
 ```
 
-Each root is resolved relative to cwd. If a root contains a `repos/` subdirectory it is treated as a workspace (all repos hoisted); otherwise it is treated as a single plain repo.
+Each root is resolved relative to cwd.
 
 **Error conditions**
 
@@ -37,13 +37,8 @@ Each root is resolved relative to cwd. If a root contains a `repos/` subdirector
 
 **Hoist strategies**
 
-Each strategy only activates for repos where it detects relevant files.
-
 | Strategy | Detects | Symlinks to |
 |---|---|---|
-| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<cwd>/.claude/skills/<repo>-<filename>` |
+| `anthropic/claude_code/agent_skills` | `.claude/skills/` — flat `.md` files or directories containing `SKILL.md` | `<cwd>/.claude/skills/<root>-<entry>` |
 
-**Notes**
-
-- If a destination path already exists, a warning is printed to stderr and the entry is skipped (no overwrite).
-- All symlinks are relative so the directory structure is fully portable.
+See [how it works](how-it-works.md) for details on namespacing, skip behavior, and adding new strategies.

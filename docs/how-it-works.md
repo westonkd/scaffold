@@ -1,30 +1,46 @@
 # How it Works
 
+## Overview
+
+`hoist` symlinks AI agent artifacts from individual directories up to cwd, namespaced by source directory name. No files are copied — symlinks mean edits in the source are immediately visible, and relative path references within a skill directory remain valid because the OS resolves the symlink to the real path before following relative references.
+
 ## Hoist Strategy System
 
-`hoist` symlinks AI agent artifacts from individual repos up to the current directory, namespaced by repo name. This makes workspace-level tooling (e.g. Claude Code) aware of skills and configs defined per-repo.
+Each hoist strategy is responsible for one type of artifact. Strategies are registered in `hoist::all_strategies()` and run against every root.
 
-Using symlinks rather than copies means edits to a skill in a repo are immediately visible through the workspace, and relative path references within a skill directory (e.g. `../hooks/foo.sh`) remain valid because the OS resolves the symlink to the real path before following relative references.
+**Detection**: A strategy scans the source directory for specific file patterns. If nothing matches, the strategy is silently skipped for that root — no output, no error.
 
-**Detection**: Each hoist strategy scans repos for specific file patterns. A strategy only activates for repos where it detects matching files — repos without relevant files are silently skipped.
+**Namespacing**: Hoisted entries are renamed with the source directory as a prefix (e.g. `canvas-lms-run-specs`) to avoid collisions when multiple roots define entries with the same name.
 
-**Namespacing**: Hoisted files are renamed to include the source repo as a prefix (e.g. `canvas-lms-test-skill.md`) to avoid collisions between repos that define files with the same name.
+**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry. Re-run with the destination removed to refresh a symlink.
 
 **Current strategies**
 
 | Strategy | Detects | Symlinks to |
 |---|---|---|
-| `anthropic/claude_code/agent_skills` | `.claude/skills/*.md` in a repo | `<cwd>/.claude/skills/<repo>-<filename>` |
-
-**Skip behavior**: If a destination path already exists, hoist prints a warning to stderr and skips that entry.
-
-## Workspace vs. Plain Repo
-
-When given a root path (from `hoist.json` or a path argument), hoist checks for a `repos/` subdirectory:
-
-- **Workspace**: if `repos/` exists, hoist iterates every directory inside it and applies all strategies to each.
-- **Plain repo**: if `repos/` is absent, the root itself is treated as a single repo.
+| `anthropic/claude_code/agent_skills` | `.claude/skills/` — flat `.md` files or directories containing `SKILL.md` | `<cwd>/.claude/skills/<root>-<entry>` |
 
 ## Symlinks
 
-All symlinks are relative (computed by `utils::relative_path()`), so the directory structure is fully portable — move or copy it anywhere and the links remain valid.
+All symlinks are relative, computed by `utils::relative_path()`. This means the directory structure is fully portable — move or copy the whole tree anywhere and the links remain valid.
+
+For example, hoisting from `canvas-lms/gems/plugins/my-plugin` into `canvas-lms/` produces a symlink like:
+
+```
+canvas-lms/.claude/skills/my-plugin-run-specs
+  → ../../gems/plugins/my-plugin/.claude/skills/run-specs
+```
+
+## Adding a Strategy
+
+Implement the `HoistStrategy` trait in a new file under `src/hoist/<vendor>/<agent>/`:
+
+```rust
+pub trait HoistStrategy {
+    fn name(&self) -> &str;
+    fn detect(&self, repo_root: &Path) -> bool;
+    fn hoist(&self, repo_name: &str, repo_root: &Path, workspace_root: &Path, force: bool) -> Result<()>;
+}
+```
+
+Then register it in `hoist::all_strategies()` in `src/hoist/mod.rs`.

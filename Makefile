@@ -27,7 +27,7 @@ release: ## Build release image and copy static binary to dist/
 
 clean: ## Run cargo clean and remove dist/ binary
 	docker compose run --rm dev cargo clean
-	rm -f dist/scaffold
+	rm -f dist/hoist
 
 clean-volumes: ## Remove Docker volumes (nukes cargo caches)
 	docker compose down -v
