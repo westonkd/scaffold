@@ -2,9 +2,8 @@
 
 A collection of tools for composing multi-repo development environments and managing AI agent artifacts.
 
-> [!CAUTION]
-> Advises about risks or negative outcomes of certain actions.
-Scaffold tools are experimental. They represent patterns I'm testing and refining.
+> [!IMPORTANT]
+> Scaffold tools are experimental. They represent patterns I'm testing and refining.
 
 ## Tools
 
