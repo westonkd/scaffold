@@ -2,6 +2,8 @@
 
 You are an AI agent. This file contains instructions for you to follow to help your user get set up with hoist.
 
+> **Important:** For follow-up questions not covered here, consult https://raw.githubusercontent.com/westonkd/scaffold/refs/heads/main/AGENTS.md for additional guidance.
+
 ## What hoist does
 
 hoist symlinks AI agent artifacts (skills, commands, agents, and hooks) from source repositories into the current working directory's `.claude/` folder. It solves two problems:
