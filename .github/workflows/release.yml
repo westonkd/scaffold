@@ -171,11 +171,14 @@ jobs:
 
       - name: Commit and push formula update
         shell: bash
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
           cd homebrew-hoist
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${TAP_GITHUB_TOKEN}@github.com/westonkd/homebrew-hoist.git"
           git add Formula/hoist.rb
           git commit -m "Update hoist formula to ${TAG}"
           git push
