@@ -11,6 +11,8 @@ hoist symlinks AI agent artifacts (skills, commands, agents, and hooks) from sou
 
 Artifacts are namespaced by repo name, so there are never collisions when multiple repos contribute the same artifact type.
 
+> **Note:** While the examples here use Claude Code, hoist's benefits compound when your repos contain artifacts for multiple agent tools — the more tools in the mix, the more value hoist provides.
+
 ## Install hoist
 
 Check whether hoist is already available:
