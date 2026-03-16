@@ -61,14 +61,14 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-          ARCHIVE="scaffold-${TAG}-${{ matrix.target }}.tar.gz"
-          cp "target/${{ matrix.target }}/release/scaffold" scaffold
-          tar czf "${ARCHIVE}" scaffold
+          ARCHIVE="hoist-${TAG}-${{ matrix.target }}.tar.gz"
+          cp "target/${{ matrix.target }}/release/hoist" hoist
+          tar czf "${ARCHIVE}" hoist
           echo "ARCHIVE=${ARCHIVE}" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: scaffold-${{ matrix.target }}
+          name: hoist-${{ matrix.target }}
           path: ${{ env.ARCHIVE }}
           if-no-files-found: error
 
@@ -106,21 +106,21 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-          sha_aarch64_darwin=$(sha256sum "artifacts/scaffold-${TAG}-aarch64-apple-darwin.tar.gz" | awk '{print $1}')
-          sha_x86_64_darwin=$(sha256sum "artifacts/scaffold-${TAG}-x86_64-apple-darwin.tar.gz" | awk '{print $1}')
-          sha_aarch64_linux=$(sha256sum "artifacts/scaffold-${TAG}-aarch64-unknown-linux-musl.tar.gz" | awk '{print $1}')
-          sha_x86_64_linux=$(sha256sum "artifacts/scaffold-${TAG}-x86_64-unknown-linux-musl.tar.gz" | awk '{print $1}')
+          sha_aarch64_darwin=$(sha256sum "artifacts/hoist-${TAG}-aarch64-apple-darwin.tar.gz" | awk '{print $1}')
+          sha_x86_64_darwin=$(sha256sum "artifacts/hoist-${TAG}-x86_64-apple-darwin.tar.gz" | awk '{print $1}')
+          sha_aarch64_linux=$(sha256sum "artifacts/hoist-${TAG}-aarch64-unknown-linux-musl.tar.gz" | awk '{print $1}')
+          sha_x86_64_linux=$(sha256sum "artifacts/hoist-${TAG}-x86_64-unknown-linux-musl.tar.gz" | awk '{print $1}')
           echo "aarch64_darwin=${sha_aarch64_darwin}" >> "$GITHUB_OUTPUT"
           echo "x86_64_darwin=${sha_x86_64_darwin}" >> "$GITHUB_OUTPUT"
           echo "aarch64_linux=${sha_aarch64_linux}" >> "$GITHUB_OUTPUT"
           echo "x86_64_linux=${sha_x86_64_linux}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout homebrew-scaffold tap
+      - name: Checkout homebrew-hoist tap
         uses: actions/checkout@v4
         with:
-          repository: westonkd/homebrew-scaffold
+          repository: westonkd/homebrew-hoist
           token: ${{ secrets.TAP_GITHUB_TOKEN }}
-          path: homebrew-scaffold
+          path: homebrew-hoist
 
       - name: Update formula
         shell: bash
@@ -132,8 +132,8 @@ jobs:
           SHA_X86_64_LINUX: ${{ steps.sha.outputs.x86_64_linux }}
         run: |
           VERSION="${TAG#v}"
-          cat > homebrew-scaffold/Formula/scaffold.rb <<FORMULA
-          class Scaffold < Formula
+          cat > homebrew-hoist/Formula/hoist.rb <<FORMULA
+          class Hoist < Formula
             desc "Compose multi-repo development environments and manage AI agent artifacts"
             homepage "https://github.com/westonkd/scaffold"
             version "${VERSION}"
@@ -141,30 +141,30 @@ jobs:
 
             on_macos do
               if Hardware::CPU.arm?
-                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/scaffold-${TAG}-aarch64-apple-darwin.tar.gz"
+                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/hoist-${TAG}-aarch64-apple-darwin.tar.gz"
                 sha256 "${SHA_AARCH64_DARWIN}"
               else
-                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/scaffold-${TAG}-x86_64-apple-darwin.tar.gz"
+                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/hoist-${TAG}-x86_64-apple-darwin.tar.gz"
                 sha256 "${SHA_X86_64_DARWIN}"
               end
             end
 
             on_linux do
               if Hardware::CPU.arm?
-                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/scaffold-${TAG}-aarch64-unknown-linux-musl.tar.gz"
+                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/hoist-${TAG}-aarch64-unknown-linux-musl.tar.gz"
                 sha256 "${SHA_AARCH64_LINUX}"
               else
-                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/scaffold-${TAG}-x86_64-unknown-linux-musl.tar.gz"
+                url "https://github.com/westonkd/scaffold/releases/download/${TAG}/hoist-${TAG}-x86_64-unknown-linux-musl.tar.gz"
                 sha256 "${SHA_X86_64_LINUX}"
               end
             end
 
             def install
-              bin.install "scaffold"
+              bin.install "hoist"
             end
 
             test do
-              assert_match "scaffold", shell_output("#{bin}/scaffold --help")
+              assert_match "hoist", shell_output("#{bin}/hoist --help")
             end
           end
           FORMULA
@@ -173,9 +173,9 @@ jobs:
         shell: bash
         run: |
           TAG="${GITHUB_REF_NAME}"
-          cd homebrew-scaffold
+          cd homebrew-hoist
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/scaffold.rb
-          git commit -m "Update scaffold formula to ${TAG}"
+          git add Formula/hoist.rb
+          git commit -m "Update hoist formula to ${TAG}"
           git push
