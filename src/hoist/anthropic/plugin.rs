@@ -126,13 +126,7 @@ fn hoist_md_artifacts(
     Ok(())
 }
 
-fn create_symlink(
-    src: &Path,
-    dst: &Path,
-    dst_dir: &Path,
-    force: bool,
-    name: &str,
-) -> Result<()> {
+fn create_symlink(src: &Path, dst: &Path, dst_dir: &Path, force: bool, name: &str) -> Result<()> {
     if dst.exists() && !force {
         eprintln!(
             "warning: skipping '{}' — destination already exists: {}",

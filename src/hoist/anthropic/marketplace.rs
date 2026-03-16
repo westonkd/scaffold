@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-use crate::hoist::HoistStrategy;
 use super::plugin;
+use crate::hoist::HoistStrategy;
 
 pub struct MarketplaceStrategy;
 
