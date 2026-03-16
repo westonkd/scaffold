@@ -1,14 +1,16 @@
-# scaffold
+# 🏗️ scaffold
 
 A collection of tools for composing multi-repo development environments and managing AI agent artifacts.
+
+> [!CAUTION]
+> Advises about risks or negative outcomes of certain actions.
+Scaffold tools are experimental. They represent patterns I'm testing and refining.
 
 ## Tools
 
 ### hoist
 
 Hoist AI agent artifacts (Claude Code skills, etc.) from repos into your current directory.
-
-**hoist is experimental!** This is a pattern I'm iterating on.
 
 #### Installation
 
