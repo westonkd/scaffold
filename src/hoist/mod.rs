@@ -16,9 +16,11 @@ pub trait HoistStrategy {
 }
 
 pub fn all_strategies() -> Vec<Box<dyn HoistStrategy>> {
-    vec![Box::new(
-        anthropic::claude_code::agent_skills::AgentSkillsStrategy,
-    )]
+    vec![
+        Box::new(anthropic::claude_code::agent_skills::AgentSkillsStrategy),
+        Box::new(anthropic::plugin::PluginStrategy),
+        Box::new(anthropic::marketplace::MarketplaceStrategy),
+    ]
 }
 
 pub fn run_all_strategies(
