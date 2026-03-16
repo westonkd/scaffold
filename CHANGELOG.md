@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `AGENTS_USAGE.md` — agent-facing onboarding guide instructing AI agents how to install hoist, run it in single-repo and multi-repo modes, and generate a personalized `hoist.json` for the user
+
 ## [0.1.3] - 2026-03-16
 
 ### Added
