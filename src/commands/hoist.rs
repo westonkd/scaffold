@@ -8,7 +8,7 @@ struct HoistConfig {
     roots: Vec<String>,
 }
 
-pub fn run(path: Option<&str>) -> Result<()> {
+pub fn run(path: Option<&str>, force: bool) -> Result<()> {
     let cwd = std::env::current_dir().with_context(|| "getting current directory")?;
 
     match path {
@@ -45,7 +45,7 @@ pub fn run(path: Option<&str>) -> Result<()> {
                     anyhow::bail!("root not found: {}", root_path.display());
                 }
 
-                hoist_from_root(&root_path, &cwd)?;
+                hoist_from_root(&root_path, &cwd, force)?;
             }
 
             Ok(())
@@ -66,12 +66,12 @@ pub fn run(path: Option<&str>) -> Result<()> {
                 anyhow::bail!("directory not found: {}", resolved_path.display());
             }
 
-            hoist_from_root(&resolved_path, &cwd)
+            hoist_from_root(&resolved_path, &cwd, force)
         }
     }
 }
 
-fn hoist_from_root(root: &std::path::Path, cwd: &std::path::Path) -> Result<()> {
+fn hoist_from_root(root: &std::path::Path, cwd: &std::path::Path, force: bool) -> Result<()> {
     let repo_name = root
         .file_name()
         .and_then(|s| s.to_str())
@@ -79,5 +79,5 @@ fn hoist_from_root(root: &std::path::Path, cwd: &std::path::Path) -> Result<()> 
         .to_string();
 
     println!("Hoisting from: {}", root.display());
-    hoist::run_all_strategies(&repo_name, root, cwd, false)
+    hoist::run_all_strategies(&repo_name, root, cwd, force)
 }

@@ -13,9 +13,13 @@ use clap::Parser;
 struct Cli {
     /// Path to a workspace or plain repo directory. If omitted, reads hoist.json from cwd.
     path: Option<String>,
+
+    /// Replace existing symlinks and re-merge hooks from scratch.
+    #[arg(long)]
+    force: bool,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    commands::hoist::run(cli.path.as_deref())
+    commands::hoist::run(cli.path.as_deref(), cli.force)
 }
