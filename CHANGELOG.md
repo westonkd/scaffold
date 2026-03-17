@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-03-17
+
+### Added
+
+- `add_to_git_exclude(workspace_root, pattern)` utility in `src/utils.rs`: appends a pattern to `.git/info/exclude` if not already present (idempotent), no-ops silently when the workspace has no `.git` directory, and creates `.git/info/` if missing
+- Hoisted symlinks are now registered in `.git/info/exclude` so they are ignored locally without polluting `.gitignore`
+  - `anthropic/claude_code/agent_skills` strategy calls `add_to_git_exclude` after each skill symlink is created
+  - `anthropic/plugin` strategy calls `add_to_git_exclude` inside the `create_symlink` helper, covering skills, agents, and commands
+
+### Changed
+
+- Added `tempfile = "3"` dev-dependency in `Cargo.toml` for utility tests
+
 ## [0.1.4] - 2026-03-16
 
 ### Added
