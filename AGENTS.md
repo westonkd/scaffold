@@ -27,13 +27,14 @@ Strategies are registered in `all_strategies()` and run against every configured
 
 | File | Purpose |
 |---|---|
-| `src/main.rs` | CLI entry point (clap); parses optional `path` arg and `--force` flag |
+| `src/main.rs` | CLI entry point (clap); routes to `hoist` or `unhoist` subcommands |
 | `src/commands/hoist.rs` | Loads `hoist.json` or resolves an explicit path; calls `run_all_strategies` per root |
+| `src/commands/unhoist.rs` | `hoist unhoist` — removes symlinks and hook entries by source root; supports explicit and prune modes |
 | `src/hoist/mod.rs` | `HoistStrategy` trait definition and `all_strategies()` registry |
 | `src/hoist/anthropic/claude_code/agent_skills.rs` | Agent skills strategy |
 | `src/hoist/anthropic/plugin.rs` | Plugin strategy; `hoist_plugin_dir` is also called by the marketplace strategy |
 | `src/hoist/anthropic/marketplace.rs` | Marketplace strategy; iterates local plugin entries |
-| `src/utils.rs` | `relative_path()` — computes a relative path between two absolute paths for portable symlinks |
+| `src/utils.rs` | `relative_path()` — portable symlink paths; `normalize_path()` — resolves `..` without filesystem access (used by unhoist for broken symlinks) |
 | `hoist.json` | Example multi-root config (used by `make test` fixture at `spec/anthropic`) |
 
 ## Build & Development
@@ -113,3 +114,4 @@ make test
 - **Idempotent with warnings** — if a destination already exists and `--force` is not set, a warning is printed and the entry is skipped; no error is raised.
 - **`--force` replaces** — existing symlinks (and broken dangling symlinks) are removed before re-creating.
 - **`${CLAUDE_PLUGIN_ROOT}` substitution** — hook paths in `hooks/hooks.json` may contain this variable; it is replaced with the plugin's absolute path before merging into the workspace's `.claude/settings.json`.
+- **Unhoist is symlink-only** — `hoist unhoist` only removes symlinks and hook entries; it never removes regular files or non-symlink directories in artifact dirs. Path-component-safe matching (trailing `/` on canonical paths) prevents a shorter root name from accidentally matching a longer one (e.g., `canvas` vs `canvas-lms`).

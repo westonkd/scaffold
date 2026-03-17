@@ -88,3 +88,34 @@ Use `--force` to replace existing symlinks and re-merge hooks from scratch:
 ```sh
 hoist --force
 ```
+
+## Removing hoisted artifacts
+
+Use `hoist unhoist` to reverse hoisting. There are two modes:
+
+**Remove artifacts from a specific repo:**
+
+```sh
+hoist unhoist ./path/to/repo
+```
+
+This removes all symlinks in `.claude/` whose target resolves into that directory, and removes any hook entries from `.claude/settings.json` that reference it.
+
+**Prune artifacts no longer in `hoist.json`:**
+
+```sh
+hoist unhoist
+```
+
+Reads `hoist.json` and removes any artifact whose source is not listed as a root. Useful after removing a repo from `hoist.json` or after deleting a repo from disk.
+
+**Preview without removing (dry-run):**
+
+```sh
+hoist unhoist --dry-run
+hoist unhoist ./some-repo --dry-run
+```
+
+Prints each artifact that would be removed (`[symlink]` or `[hook]`) without modifying anything.
+
+> **Note:** Only symlinks are removed. Regular files and non-symlink directories in `.claude/` artifact dirs are never touched. Other settings in `.claude/settings.json` (model, permissions, etc.) are preserved.
