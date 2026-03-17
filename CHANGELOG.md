@@ -7,9 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-03-16
+
 ### Added
 
-- `AGENTS_USAGE.md` — agent-facing onboarding guide instructing AI agents how to install hoist, run it in single-repo and multi-repo modes, and generate a personalized `hoist.json` for the user
+- `hoist unhoist [PATH]` subcommand to reverse hoisting: removes symlinks and hook entries from the workspace
+  - Explicit mode (`hoist unhoist ./repo`): removes all artifacts whose symlink target resolves into the given path
+  - Prune mode (`hoist unhoist`): reads `hoist.json` and removes artifacts from any root no longer listed
+  - `--dry-run` flag: prints what would be removed without modifying anything
+  - Handles broken/dangling symlinks, directory symlinks, and multi-plugin hook entries
+- `normalize_path()` utility for resolving `..` components without filesystem access (supports broken symlink targets)
+
+### Fixed
+
+- Hook matching now uses path-component-safe prefix comparison (trailing `/`) to prevent a shorter root name (e.g. `canvas`) from falsely matching a longer one (`canvas-lms`)
 
 ## [0.1.3] - 2026-03-16
 
