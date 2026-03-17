@@ -25,6 +25,26 @@ pub fn relative_path(from_dir: &std::path::Path, to: &std::path::Path) -> PathBu
     result
 }
 
+/// Normalize a path by resolving `.` and `..` components without touching the filesystem.
+/// Unlike `canonicalize`, this works on non-existent paths (e.g. broken symlink targets).
+pub fn normalize_path(path: &std::path::Path) -> PathBuf {
+    use std::path::Component;
+    let mut components: Vec<Component> = vec![];
+    for component in path.components() {
+        match component {
+            Component::ParentDir => {
+                // Only pop if we have a non-root component to pop
+                if matches!(components.last(), Some(Component::Normal(_))) {
+                    components.pop();
+                }
+            }
+            Component::CurDir => {}
+            c => components.push(c),
+        }
+    }
+    components.iter().collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -51,6 +51,26 @@ Then run:
 hoist
 ```
 
+##### Removing hoisted artifacts
+
+Remove all artifacts from a specific repo:
+
+```bash
+hoist unhoist ./some-repo
+```
+
+Or prune any artifacts whose source is no longer listed in `hoist.json`:
+
+```bash
+hoist unhoist
+```
+
+Pass `--dry-run` to preview what would be removed without touching anything:
+
+```bash
+hoist unhoist --dry-run
+```
+
 #### The Problems
 
 **1. Agents don't reliably discover nested artifacts.**
