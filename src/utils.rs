@@ -1,4 +1,45 @@
-use std::path::PathBuf;
+use anyhow::{Context, Result};
+use std::path::{Path, PathBuf};
+
+/// Append `pattern` to `<workspace_root>/.git/info/exclude` if it is not already present.
+///
+/// Silently does nothing when `workspace_root` does not contain a `.git` directory (not a git
+/// repo) so callers do not need to guard against non-git workspaces.
+pub fn add_to_git_exclude(workspace_root: &Path, pattern: &str) -> Result<()> {
+    let git_dir = workspace_root.join(".git");
+    if !git_dir.is_dir() {
+        return Ok(());
+    }
+
+    let info_dir = git_dir.join("info");
+    std::fs::create_dir_all(&info_dir)
+        .with_context(|| format!("creating {}", info_dir.display()))?;
+
+    let exclude_path = info_dir.join("exclude");
+
+    let existing = if exclude_path.is_file() {
+        std::fs::read_to_string(&exclude_path)
+            .with_context(|| format!("reading {}", exclude_path.display()))?
+    } else {
+        String::new()
+    };
+
+    if existing.lines().any(|line| line == pattern) {
+        return Ok(());
+    }
+
+    let mut content = existing;
+    if !content.is_empty() && !content.ends_with('\n') {
+        content.push('\n');
+    }
+    content.push_str(pattern);
+    content.push('\n');
+
+    std::fs::write(&exclude_path, content)
+        .with_context(|| format!("writing {}", exclude_path.display()))?;
+
+    Ok(())
+}
 
 /// Compute a relative path from `from_dir` to `to`, both absolute.
 ///
@@ -64,5 +105,59 @@ mod tests {
         let to = Path::new("/a/c");
         let rel = relative_path(from, to);
         assert_eq!(rel, PathBuf::from("../c"));
+    }
+
+    #[test]
+    fn test_add_to_git_exclude_appends_pattern() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path();
+        std::fs::create_dir_all(workspace.join(".git").join("info")).unwrap();
+
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+
+        let content =
+            std::fs::read_to_string(workspace.join(".git").join("info").join("exclude")).unwrap();
+        assert!(content.contains(".claude/skills/repo-skill"));
+    }
+
+    #[test]
+    fn test_add_to_git_exclude_no_duplicate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path();
+        std::fs::create_dir_all(workspace.join(".git").join("info")).unwrap();
+
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+
+        let content =
+            std::fs::read_to_string(workspace.join(".git").join("info").join("exclude")).unwrap();
+        assert_eq!(
+            content
+                .lines()
+                .filter(|l| *l == ".claude/skills/repo-skill")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn test_add_to_git_exclude_no_git_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path();
+        // No .git directory — should succeed silently
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        assert!(!workspace.join(".git").join("info").join("exclude").exists());
+    }
+
+    #[test]
+    fn test_add_to_git_exclude_creates_info_dir() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = tmp.path();
+        // .git exists but .git/info does not
+        std::fs::create_dir_all(workspace.join(".git")).unwrap();
+
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+
+        assert!(workspace.join(".git").join("info").join("exclude").exists());
     }
 }

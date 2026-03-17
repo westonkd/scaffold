@@ -101,6 +101,15 @@ impl HoistStrategy for AgentSkillsStrategy {
                     rel_target.display()
                 )
             })?;
+
+            if let Ok(relative) = dst_path.strip_prefix(workspace_root) {
+                crate::utils::add_to_git_exclude(workspace_root, &relative.to_string_lossy())?;
+            } else {
+                eprintln!(
+                    "warning: could not compute relative path for git exclude: {}",
+                    dst_path.display()
+                );
+            }
         }
 
         Ok(())

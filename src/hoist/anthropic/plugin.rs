@@ -77,7 +77,14 @@ fn hoist_skills(
             .with_context(|| format!("getting name for {}", path.display()))?;
 
         let dst_path = dst_dir.join(format!("{}-{}", plugin_name, skill_name));
-        create_symlink(&path, &dst_path, &dst_dir, force, skill_name)?;
+        create_symlink(
+            &path,
+            &dst_path,
+            &dst_dir,
+            workspace_root,
+            force,
+            skill_name,
+        )?;
     }
 
     Ok(())
@@ -120,13 +127,20 @@ fn hoist_md_artifacts(
             .unwrap_or(basename);
 
         let dst_path = dst_dir.join(format!("{}-{}.md", plugin_name, stem));
-        create_symlink(&path, &dst_path, &dst_dir, force, basename)?;
+        create_symlink(&path, &dst_path, &dst_dir, workspace_root, force, basename)?;
     }
 
     Ok(())
 }
 
-fn create_symlink(src: &Path, dst: &Path, dst_dir: &Path, force: bool, name: &str) -> Result<()> {
+fn create_symlink(
+    src: &Path,
+    dst: &Path,
+    dst_dir: &Path,
+    workspace_root: &Path,
+    force: bool,
+    name: &str,
+) -> Result<()> {
     if dst.exists() && !force {
         eprintln!(
             "warning: skipping '{}' — destination already exists: {}",
@@ -160,6 +174,15 @@ fn create_symlink(src: &Path, dst: &Path, dst_dir: &Path, force: bool, name: &st
             rel_target.display()
         )
     })?;
+
+    if let Ok(relative) = dst.strip_prefix(workspace_root) {
+        crate::utils::add_to_git_exclude(workspace_root, &relative.to_string_lossy())?;
+    } else {
+        eprintln!(
+            "warning: could not compute relative path for git exclude: {}",
+            dst.display()
+        );
+    }
 
     Ok(())
 }
