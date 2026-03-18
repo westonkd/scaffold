@@ -24,8 +24,9 @@ impl HoistStrategy for PluginStrategy {
         repo_root: &Path,
         workspace_root: &Path,
         force: bool,
+        verbose: bool,
     ) -> Result<()> {
-        hoist_plugin_dir(repo_name, repo_root, workspace_root, force)
+        hoist_plugin_dir(repo_name, repo_root, workspace_root, force, verbose)
     }
 }
 
@@ -38,11 +39,26 @@ pub fn hoist_plugin_dir(
     plugin_root: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
 ) -> Result<()> {
-    hoist_skills(plugin_name, plugin_root, workspace_root, force)?;
-    hoist_md_artifacts("agents", plugin_name, plugin_root, workspace_root, force)?;
-    hoist_md_artifacts("commands", plugin_name, plugin_root, workspace_root, force)?;
-    hoist_hooks(plugin_name, plugin_root, workspace_root, force)?;
+    hoist_skills(plugin_name, plugin_root, workspace_root, force, verbose)?;
+    hoist_md_artifacts(
+        "agents",
+        plugin_name,
+        plugin_root,
+        workspace_root,
+        force,
+        verbose,
+    )?;
+    hoist_md_artifacts(
+        "commands",
+        plugin_name,
+        plugin_root,
+        workspace_root,
+        force,
+        verbose,
+    )?;
+    hoist_hooks(plugin_name, plugin_root, workspace_root, force, verbose)?;
     Ok(())
 }
 
@@ -51,6 +67,7 @@ fn hoist_skills(
     plugin_root: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
 ) -> Result<()> {
     let src_dir = plugin_root.join("skills");
     if !src_dir.is_dir() {
@@ -83,6 +100,7 @@ fn hoist_skills(
             &dst_dir,
             workspace_root,
             force,
+            verbose,
             skill_name,
         )?;
     }
@@ -96,6 +114,7 @@ fn hoist_md_artifacts(
     plugin_root: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
 ) -> Result<()> {
     let src_dir = plugin_root.join(artifact_type);
     if !src_dir.is_dir() {
@@ -127,7 +146,15 @@ fn hoist_md_artifacts(
             .unwrap_or(basename);
 
         let dst_path = dst_dir.join(format!("{}-{}.md", plugin_name, stem));
-        create_symlink(&path, &dst_path, &dst_dir, workspace_root, force, basename)?;
+        create_symlink(
+            &path,
+            &dst_path,
+            &dst_dir,
+            workspace_root,
+            force,
+            verbose,
+            basename,
+        )?;
     }
 
     Ok(())
@@ -139,6 +166,7 @@ fn create_symlink(
     dst_dir: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
     name: &str,
 ) -> Result<()> {
     if dst.exists() && !force {
@@ -167,6 +195,13 @@ fn create_symlink(
     }
 
     let rel_target = relative_path(dst_dir, src);
+    if verbose {
+        eprintln!(
+            "  [verbose] symlink: {} -> {}",
+            dst.display(),
+            rel_target.display()
+        );
+    }
     std::os::unix::fs::symlink(&rel_target, dst).with_context(|| {
         format!(
             "creating symlink {} -> {}",
@@ -176,7 +211,7 @@ fn create_symlink(
     })?;
 
     if let Ok(relative) = dst.strip_prefix(workspace_root) {
-        crate::utils::add_to_git_exclude(workspace_root, &relative.to_string_lossy())?;
+        crate::utils::add_to_git_exclude(workspace_root, &relative.to_string_lossy(), verbose)?;
     } else {
         eprintln!(
             "warning: could not compute relative path for git exclude: {}",
@@ -192,9 +227,16 @@ fn hoist_hooks(
     plugin_root: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
 ) -> Result<()> {
     let hooks_json_path = plugin_root.join("hooks").join("hooks.json");
     if !hooks_json_path.is_file() {
+        if verbose {
+            eprintln!(
+                "  [verbose] hooks: no hooks.json found at {}",
+                hooks_json_path.display()
+            );
+        }
         return Ok(());
     }
 
@@ -274,6 +316,12 @@ fn hoist_hooks(
 
     // Extend each event array with the plugin's hook entries
     for (event, plugin_entries) in &plugin_hooks_map {
+        if verbose {
+            eprintln!(
+                "  [verbose] hooks: merging event '{}' from '{}'",
+                event, plugin_name
+            );
+        }
         let existing = settings_hooks
             .entry(event.clone())
             .or_insert_with(|| serde_json::Value::Array(vec![]));

@@ -12,6 +12,7 @@ pub trait HoistStrategy {
         repo_root: &Path,
         workspace_root: &Path,
         force: bool,
+        verbose: bool,
     ) -> Result<()>;
 }
 
@@ -28,12 +29,13 @@ pub fn run_all_strategies(
     repo_root: &Path,
     workspace_root: &Path,
     force: bool,
+    verbose: bool,
 ) -> Result<()> {
     for strategy in all_strategies() {
         if strategy.detect(repo_root) {
             println!("  [{}] hoisting from {}", strategy.name(), repo_name);
             strategy
-                .hoist(repo_name, repo_root, workspace_root, force)
+                .hoist(repo_name, repo_root, workspace_root, force, verbose)
                 .with_context(|| {
                     format!(
                         "strategy '{}' failed on repo '{}'",
@@ -41,6 +43,12 @@ pub fn run_all_strategies(
                         repo_name
                     )
                 })?;
+        } else if verbose {
+            eprintln!(
+                "  [verbose] [{}] not detected in {}",
+                strategy.name(),
+                repo_root.display()
+            );
         }
     }
     Ok(())

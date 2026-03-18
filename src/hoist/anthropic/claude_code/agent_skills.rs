@@ -35,6 +35,7 @@ impl HoistStrategy for AgentSkillsStrategy {
         repo_root: &Path,
         workspace_root: &Path,
         force: bool,
+        verbose: bool,
     ) -> Result<()> {
         let src_dir = repo_root.join(".claude").join("skills");
         let dst_dir = workspace_root.join(".claude").join("skills");
@@ -59,6 +60,12 @@ impl HoistStrategy for AgentSkillsStrategy {
                 path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("md");
 
             if !is_dir_skill && !is_flat_skill {
+                if verbose {
+                    eprintln!(
+                        "  [verbose] skipping '{}' — not a recognized skill (no SKILL.md or .md file)",
+                        path.display()
+                    );
+                }
                 continue;
             }
 
@@ -94,6 +101,13 @@ impl HoistStrategy for AgentSkillsStrategy {
             }
 
             let rel_target = relative_path(&dst_dir, &path);
+            if verbose {
+                eprintln!(
+                    "  [verbose] symlink: {} -> {}",
+                    dst_path.display(),
+                    rel_target.display()
+                );
+            }
             std::os::unix::fs::symlink(&rel_target, &dst_path).with_context(|| {
                 format!(
                     "creating symlink {} -> {}",
@@ -103,7 +117,11 @@ impl HoistStrategy for AgentSkillsStrategy {
             })?;
 
             if let Ok(relative) = dst_path.strip_prefix(workspace_root) {
-                crate::utils::add_to_git_exclude(workspace_root, &relative.to_string_lossy())?;
+                crate::utils::add_to_git_exclude(
+                    workspace_root,
+                    &relative.to_string_lossy(),
+                    verbose,
+                )?;
             } else {
                 eprintln!(
                     "warning: could not compute relative path for git exclude: {}",

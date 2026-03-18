@@ -5,9 +5,18 @@ use std::path::{Path, PathBuf};
 ///
 /// Silently does nothing when `workspace_root` does not contain a `.git` directory (not a git
 /// repo) so callers do not need to guard against non-git workspaces.
-pub fn add_to_git_exclude(workspace_root: &Path, pattern: &str) -> Result<()> {
+///
+/// When `verbose` is true, prints what action was taken (or skipped and why).
+pub fn add_to_git_exclude(workspace_root: &Path, pattern: &str, verbose: bool) -> Result<()> {
     let git_dir = workspace_root.join(".git");
     if !git_dir.is_dir() {
+        if verbose {
+            eprintln!(
+                "  [verbose] git exclude: skipped '{}' — no .git directory at {}",
+                pattern,
+                workspace_root.display()
+            );
+        }
         return Ok(());
     }
 
@@ -25,6 +34,13 @@ pub fn add_to_git_exclude(workspace_root: &Path, pattern: &str) -> Result<()> {
     };
 
     if existing.lines().any(|line| line == pattern) {
+        if verbose {
+            eprintln!(
+                "  [verbose] git exclude: '{}' already present in {}",
+                pattern,
+                exclude_path.display()
+            );
+        }
         return Ok(());
     }
 
@@ -37,6 +53,14 @@ pub fn add_to_git_exclude(workspace_root: &Path, pattern: &str) -> Result<()> {
 
     std::fs::write(&exclude_path, content)
         .with_context(|| format!("writing {}", exclude_path.display()))?;
+
+    if verbose {
+        eprintln!(
+            "  [verbose] git exclude: added '{}' to {}",
+            pattern,
+            exclude_path.display()
+        );
+    }
 
     Ok(())
 }
@@ -113,7 +137,7 @@ mod tests {
         let workspace = tmp.path();
         std::fs::create_dir_all(workspace.join(".git").join("info")).unwrap();
 
-        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill", false).unwrap();
 
         let content =
             std::fs::read_to_string(workspace.join(".git").join("info").join("exclude")).unwrap();
@@ -126,8 +150,8 @@ mod tests {
         let workspace = tmp.path();
         std::fs::create_dir_all(workspace.join(".git").join("info")).unwrap();
 
-        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
-        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill", false).unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill", false).unwrap();
 
         let content =
             std::fs::read_to_string(workspace.join(".git").join("info").join("exclude")).unwrap();
@@ -145,7 +169,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let workspace = tmp.path();
         // No .git directory — should succeed silently
-        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill", false).unwrap();
         assert!(!workspace.join(".git").join("info").join("exclude").exists());
     }
 
@@ -156,7 +180,7 @@ mod tests {
         // .git exists but .git/info does not
         std::fs::create_dir_all(workspace.join(".git")).unwrap();
 
-        add_to_git_exclude(workspace, ".claude/skills/repo-skill").unwrap();
+        add_to_git_exclude(workspace, ".claude/skills/repo-skill", false).unwrap();
 
         assert!(workspace.join(".git").join("info").join("exclude").exists());
     }
