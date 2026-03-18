@@ -13,7 +13,7 @@ struct HoistConfig {
 /// Directories under the workspace that may contain hoisted symlinks.
 const ARTIFACT_DIRS: &[&str] = &["skills", "agents", "commands"];
 
-pub fn run(path: Option<&str>, dry_run: bool) -> Result<()> {
+pub fn run(path: Option<&str>, dry_run: bool, verbose: bool) -> Result<()> {
     let cwd = std::env::current_dir().with_context(|| "getting current directory")?;
 
     if dry_run {
@@ -24,8 +24,8 @@ pub fn run(path: Option<&str>, dry_run: bool) -> Result<()> {
         Some(p) => {
             let source_root = resolve_source_root(p, &cwd)?;
             println!("Removing artifacts from: {}", source_root.display());
-            remove_symlinks_under(&source_root, &cwd, dry_run)?;
-            remove_hooks_under(&source_root, &cwd, dry_run)?;
+            remove_symlinks_under(&source_root, &cwd, dry_run, verbose)?;
+            remove_hooks_under(&source_root, &cwd, dry_run, verbose)?;
         }
         None => {
             let config_path = cwd.join("hoist.json");
@@ -56,8 +56,8 @@ pub fn run(path: Option<&str>, dry_run: bool) -> Result<()> {
                 })
                 .collect();
 
-            prune_symlinks(&valid_roots, &cwd, dry_run)?;
-            prune_hooks(&valid_roots, &cwd, dry_run)?;
+            prune_symlinks(&valid_roots, &cwd, dry_run, verbose)?;
+            prune_hooks(&valid_roots, &cwd, dry_run, verbose)?;
         }
     }
 
@@ -93,11 +93,22 @@ fn resolve_symlink_abs(symlink: &Path) -> Option<PathBuf> {
 }
 
 /// Remove symlinks in all artifact dirs whose resolved target starts with `source_root`.
-fn remove_symlinks_under(source_root: &Path, workspace_root: &Path, dry_run: bool) -> Result<()> {
+fn remove_symlinks_under(
+    source_root: &Path,
+    workspace_root: &Path,
+    dry_run: bool,
+    verbose: bool,
+) -> Result<()> {
     let claude_dir = workspace_root.join(".claude");
     for &subdir in ARTIFACT_DIRS {
         let dir = claude_dir.join(subdir);
         if !dir.is_dir() {
+            if verbose {
+                eprintln!(
+                    "  [verbose] skipping '{}' — directory does not exist",
+                    dir.display()
+                );
+            }
             continue;
         }
         for entry in
@@ -111,7 +122,13 @@ fn remove_symlinks_under(source_root: &Path, workspace_root: &Path, dry_run: boo
             }
             if let Some(resolved) = resolve_symlink_abs(&path) {
                 if resolved.starts_with(source_root) {
-                    remove_artifact(&path, dry_run)?;
+                    remove_artifact(&path, dry_run, verbose)?;
+                } else if verbose {
+                    eprintln!(
+                        "  [verbose] keeping {} — resolves to {} (not under source root)",
+                        path.display(),
+                        resolved.display()
+                    );
                 }
             }
         }
@@ -125,11 +142,18 @@ fn prune_symlinks(
     valid_roots: &HashSet<PathBuf>,
     workspace_root: &Path,
     dry_run: bool,
+    verbose: bool,
 ) -> Result<()> {
     let claude_dir = workspace_root.join(".claude");
     for &subdir in ARTIFACT_DIRS {
         let dir = claude_dir.join(subdir);
         if !dir.is_dir() {
+            if verbose {
+                eprintln!(
+                    "  [verbose] skipping '{}' — directory does not exist",
+                    dir.display()
+                );
+            }
             continue;
         }
         for entry in
@@ -143,7 +167,13 @@ fn prune_symlinks(
             if let Some(resolved) = resolve_symlink_abs(&path) {
                 let under_valid_root = valid_roots.iter().any(|r| resolved.starts_with(r));
                 if !under_valid_root {
-                    remove_artifact(&path, dry_run)?;
+                    remove_artifact(&path, dry_run, verbose)?;
+                } else if verbose {
+                    eprintln!(
+                        "  [verbose] keeping {} — resolves to {} (under a valid root)",
+                        path.display(),
+                        resolved.display()
+                    );
                 }
             }
         }
@@ -151,7 +181,10 @@ fn prune_symlinks(
     Ok(())
 }
 
-fn remove_artifact(path: &Path, dry_run: bool) -> Result<()> {
+fn remove_artifact(path: &Path, dry_run: bool, verbose: bool) -> Result<()> {
+    if verbose {
+        eprintln!("  [verbose] removing symlink: {}", path.display());
+    }
     if dry_run {
         println!("  [symlink] {}", path.display());
     } else {
@@ -162,23 +195,33 @@ fn remove_artifact(path: &Path, dry_run: bool) -> Result<()> {
 }
 
 /// Remove hook entries from .claude/settings.json whose embedded path starts with `source_root`.
-fn remove_hooks_under(source_root: &Path, workspace_root: &Path, dry_run: bool) -> Result<()> {
+fn remove_hooks_under(
+    source_root: &Path,
+    workspace_root: &Path,
+    dry_run: bool,
+    verbose: bool,
+) -> Result<()> {
     // Append "/" so "/repos/canvas" doesn't match "/repos/canvas-lms/..."
     let root_prefix = format!("{}/", source_root.to_string_lossy());
-    remove_hooks_matching(workspace_root, dry_run, |entry_str| {
+    remove_hooks_matching(workspace_root, dry_run, verbose, |entry_str| {
         entry_str.contains(root_prefix.as_str())
     })
 }
 
 /// Remove hook entries from .claude/settings.json whose embedded path does NOT
 /// start with any path in `valid_roots`.
-fn prune_hooks(valid_roots: &HashSet<PathBuf>, workspace_root: &Path, dry_run: bool) -> Result<()> {
+fn prune_hooks(
+    valid_roots: &HashSet<PathBuf>,
+    workspace_root: &Path,
+    dry_run: bool,
+    verbose: bool,
+) -> Result<()> {
     // Append "/" so "/repos/canvas" doesn't match "/repos/canvas-lms/..."
     let valid_prefixes: Vec<String> = valid_roots
         .iter()
         .map(|r| format!("{}/", r.to_string_lossy()))
         .collect();
-    remove_hooks_matching(workspace_root, dry_run, |entry_str| {
+    remove_hooks_matching(workspace_root, dry_run, verbose, |entry_str| {
         !valid_prefixes
             .iter()
             .any(|r| entry_str.contains(r.as_str()))
@@ -187,12 +230,23 @@ fn prune_hooks(valid_roots: &HashSet<PathBuf>, workspace_root: &Path, dry_run: b
 
 /// Generic hook-entry removal. Removes entries from .claude/settings.json["hooks"]
 /// where `should_remove(entry.to_string())` returns true.
-fn remove_hooks_matching<F>(workspace_root: &Path, dry_run: bool, should_remove: F) -> Result<()>
+fn remove_hooks_matching<F>(
+    workspace_root: &Path,
+    dry_run: bool,
+    verbose: bool,
+    should_remove: F,
+) -> Result<()>
 where
     F: Fn(&str) -> bool,
 {
     let settings_path = workspace_root.join(".claude").join("settings.json");
     if !settings_path.is_file() {
+        if verbose {
+            eprintln!(
+                "  [verbose] hooks: no settings.json found at {}",
+                settings_path.display()
+            );
+        }
         return Ok(());
     }
 
@@ -203,7 +257,15 @@ where
 
     let hooks_map = match settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
         Some(m) => m,
-        None => return Ok(()),
+        None => {
+            if verbose {
+                eprintln!(
+                    "  [verbose] hooks: no hooks section found in {}",
+                    settings_path.display()
+                );
+            }
+            return Ok(());
+        }
     };
 
     let mut removed_count = 0usize;

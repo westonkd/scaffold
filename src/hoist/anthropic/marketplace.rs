@@ -24,6 +24,7 @@ impl HoistStrategy for MarketplaceStrategy {
         repo_root: &Path,
         workspace_root: &Path,
         force: bool,
+        verbose: bool,
     ) -> Result<()> {
         let marketplace_path = repo_root.join(".claude-plugin").join("marketplace.json");
         let raw = std::fs::read_to_string(&marketplace_path)
@@ -37,12 +38,24 @@ impl HoistStrategy for MarketplaceStrategy {
                 Some(s) => s.to_string(),
                 None => {
                     // Remote source (object) — skip
+                    if verbose {
+                        eprintln!(
+                            "  [verbose] marketplace: skipping '{}' — remote source",
+                            entry.name
+                        );
+                    }
                     continue;
                 }
             };
 
             if !source_str.starts_with("./") {
                 // Not a relative local path — skip
+                if verbose {
+                    eprintln!(
+                        "  [verbose] marketplace: skipping '{}' — source '{}' is not a relative local path",
+                        entry.name, source_str
+                    );
+                }
                 continue;
             }
 
@@ -62,7 +75,7 @@ impl HoistStrategy for MarketplaceStrategy {
             let plugin_label = format!("{}-{}", repo_name, entry.name);
             println!("    [plugin] hoisting '{}'", plugin_label);
 
-            plugin::hoist_plugin_dir(&plugin_label, &plugin_dir, workspace_root, force)
+            plugin::hoist_plugin_dir(&plugin_label, &plugin_dir, workspace_root, force, verbose)
                 .with_context(|| format!("hoisting plugin '{}'", plugin_label))?;
         }
 

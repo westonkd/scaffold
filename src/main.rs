@@ -20,6 +20,10 @@ struct Cli {
     /// Replace existing symlinks and re-merge hooks from scratch.
     #[arg(long)]
     force: bool,
+
+    /// Print verbose details about each operation (useful for troubleshooting).
+    #[arg(long, short)]
+    verbose: bool,
 }
 
 #[derive(Subcommand)]
@@ -35,15 +39,21 @@ enum Commands {
         /// Print what would be removed without removing anything.
         #[arg(long)]
         dry_run: bool,
+
+        /// Print verbose details about each operation (useful for troubleshooting).
+        #[arg(long, short)]
+        verbose: bool,
     },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Some(Commands::Unhoist { path, dry_run }) => {
-            commands::unhoist::run(path.as_deref(), dry_run)
-        }
-        None => commands::hoist::run(cli.path.as_deref(), cli.force),
+        Some(Commands::Unhoist {
+            path,
+            dry_run,
+            verbose,
+        }) => commands::unhoist::run(path.as_deref(), dry_run, verbose),
+        None => commands::hoist::run(cli.path.as_deref(), cli.force, cli.verbose),
     }
 }
