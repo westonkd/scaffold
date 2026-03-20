@@ -1,0 +1,33 @@
+# Copy this file to terraform.tfvars and fill in your values.
+
+# AWS region to deploy into
+aws_region = "us-east-1"
+
+# Globally unique name for the Scaffold S3 bucket
+bucket_name = "my-org-scaffold-storage"
+
+# IAM principal ARNs (users or roles) that may assume the CLI read/write role.
+# Typically the ARNs of engineers who run the Scaffold CLI.
+cli_trusted_principal_arns = [
+  "arn:aws:iam::123456789012:user/alice",
+  "arn:aws:iam::123456789012:user/bob",
+]
+
+# IAM principal ARNs that may assume the web app role.
+# Typically the service account or task role used by the Scaffold web process.
+web_trusted_principal_arns = [
+  "arn:aws:iam::123456789012:role/scaffold-web-service",
+]
+
+# Set to true to also create a read-only CLI role (scaffold_cli_ro).
+# Useful for granting read-only access to reviewers or CI pipelines.
+create_readonly_role = false
+
+# Optional: provide a KMS key ARN to use SSE-KMS instead of SSE-S3.
+# kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/your-key-id"
+
+# Optional resource tags
+tags = {
+  Project     = "scaffold"
+  Environment = "production"
+}
