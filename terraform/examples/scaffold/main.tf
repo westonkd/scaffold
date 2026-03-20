@@ -31,6 +31,12 @@ variable "bucket_name" {
   description = "Globally unique S3 bucket name for Scaffold storage"
 }
 
+variable "name_prefix" {
+  type        = string
+  default     = "scaffold"
+  description = "Prefix for IAM role and policy names"
+}
+
 variable "cli_trusted_principal_arns" {
   type        = list(string)
   description = "IAM principal ARNs (users or roles) allowed to assume the CLI roles"
@@ -51,6 +57,12 @@ variable "kms_key_arn" {
   type        = string
   default     = null
   description = "Optional KMS key ARN for SSE-KMS bucket encryption"
+}
+
+variable "max_session_duration" {
+  type        = number
+  default     = 3600
+  description = "Maximum session duration in seconds for assumed roles (900–43200)"
 }
 
 variable "tags" {
@@ -75,9 +87,12 @@ module "iam" {
   source = "../../modules/iam"
 
   bucket_arn                 = module.s3.bucket_arn
+  name_prefix                = var.name_prefix
   cli_trusted_principal_arns = var.cli_trusted_principal_arns
   web_trusted_principal_arns = var.web_trusted_principal_arns
   create_readonly_role       = var.create_readonly_role
+  kms_key_arn                = var.kms_key_arn
+  max_session_duration       = var.max_session_duration
   tags                       = var.tags
 }
 
@@ -92,8 +107,27 @@ locals {
 }
 
 data "aws_iam_policy_document" "bucket_policy" {
+  count = length(local.allowed_role_arns) > 0 ? 1 : 0
+
   statement {
-    sid    = "AllowRoleAccess"
+    sid    = "AllowRoleListBucket"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = local.allowed_role_arns
+    }
+
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+    ]
+
+    resources = [module.s3.bucket_arn]
+  }
+
+  statement {
+    sid    = "AllowRoleObjectAccess"
     effect = "Allow"
 
     principals {
@@ -105,19 +139,18 @@ data "aws_iam_policy_document" "bucket_policy" {
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
-      "s3:ListBucket",
     ]
 
-    resources = [
-      module.s3.bucket_arn,
-      "${module.s3.bucket_arn}/*",
-    ]
+    resources = ["${module.s3.bucket_arn}/*"]
   }
 }
 
 resource "aws_s3_bucket_policy" "scaffold" {
+  count  = length(local.allowed_role_arns) > 0 ? 1 : 0
   bucket = module.s3.bucket_name
-  policy = data.aws_iam_policy_document.bucket_policy.json
+  policy = data.aws_iam_policy_document.bucket_policy[0].json
+
+  depends_on = [module.s3]
 }
 
 output "bucket_name" {

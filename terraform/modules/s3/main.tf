@@ -1,6 +1,16 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
+  }
+}
+
 resource "aws_s3_bucket" "this" {
-  bucket = var.bucket_name
-  tags   = var.tags
+  bucket        = var.bucket_name
+  force_destroy = var.force_destroy
+  tags          = var.tags
 }
 
 resource "aws_s3_bucket_versioning" "this" {
@@ -15,6 +25,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
 
   rule {
+    bucket_key_enabled = var.kms_key_arn != null
+
     apply_server_side_encryption_by_default {
       sse_algorithm     = var.kms_key_arn != null ? "aws:kms" : "AES256"
       kms_master_key_id = var.kms_key_arn
@@ -35,7 +47,24 @@ data "aws_iam_policy_document" "bucket_policy" {
   count = length(var.allowed_role_arns) > 0 ? 1 : 0
 
   statement {
-    sid    = "AllowRoleAccess"
+    sid    = "AllowRoleListBucket"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = var.allowed_role_arns
+    }
+
+    actions = [
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+    ]
+
+    resources = [aws_s3_bucket.this.arn]
+  }
+
+  statement {
+    sid    = "AllowRoleObjectAccess"
     effect = "Allow"
 
     principals {
@@ -47,13 +76,9 @@ data "aws_iam_policy_document" "bucket_policy" {
       "s3:GetObject",
       "s3:PutObject",
       "s3:DeleteObject",
-      "s3:ListBucket",
     ]
 
-    resources = [
-      aws_s3_bucket.this.arn,
-      "${aws_s3_bucket.this.arn}/*",
-    ]
+    resources = ["${aws_s3_bucket.this.arn}/*"]
   }
 }
 

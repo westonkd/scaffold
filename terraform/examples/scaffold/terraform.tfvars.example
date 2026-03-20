@@ -1,5 +1,7 @@
 # Copy this file to terraform.tfvars and fill in your values.
 
+# IMPORTANT: Replace all ARNs below with values from your own AWS account before applying.
+
 # AWS region to deploy into
 aws_region = "us-east-1"
 
@@ -25,6 +27,12 @@ create_readonly_role = false
 
 # Optional: provide a KMS key ARN to use SSE-KMS instead of SSE-S3.
 # kms_key_arn = "arn:aws:kms:us-east-1:123456789012:key/your-key-id"
+
+# Optional: override the prefix used for IAM role/policy names (default: "scaffold").
+# name_prefix = "myorg-scaffold"
+
+# Optional: maximum session duration in seconds for assumed roles (default: 3600).
+# max_session_duration = 3600
 
 # Optional resource tags
 tags = {
