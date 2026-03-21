@@ -9,6 +9,6 @@ output "cli_ro_role_arn" {
 }
 
 output "web_role_arn" {
-  value       = aws_iam_role.web.arn
-  description = "ARN of the scaffold_web role"
+  value       = length(aws_iam_role.web) > 0 ? aws_iam_role.web[0].arn : null
+  description = "ARN of the scaffold_web role (null if not created)"
 }

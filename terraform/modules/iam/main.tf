@@ -136,6 +136,8 @@ resource "aws_iam_role_policy_attachment" "cli_ro" {
 # --- scaffold_web ---
 
 data "aws_iam_policy_document" "web_assume" {
+  count = length(var.web_trusted_principal_arns) > 0 ? 1 : 0
+
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
@@ -148,8 +150,9 @@ data "aws_iam_policy_document" "web_assume" {
 }
 
 resource "aws_iam_role" "web" {
+  count                = length(var.web_trusted_principal_arns) > 0 ? 1 : 0
   name                 = "${var.name_prefix}_web"
-  assume_role_policy   = data.aws_iam_policy_document.web_assume.json
+  assume_role_policy   = data.aws_iam_policy_document.web_assume[0].json
   max_session_duration = var.max_session_duration
   tags                 = var.tags
 }
@@ -189,12 +192,14 @@ data "aws_iam_policy_document" "web" {
 }
 
 resource "aws_iam_policy" "web" {
+  count  = length(var.web_trusted_principal_arns) > 0 ? 1 : 0
   name   = "${var.name_prefix}_web"
   policy = data.aws_iam_policy_document.web.json
   tags   = var.tags
 }
 
 resource "aws_iam_role_policy_attachment" "web" {
-  role       = aws_iam_role.web.name
-  policy_arn = aws_iam_policy.web.arn
+  count      = length(var.web_trusted_principal_arns) > 0 ? 1 : 0
+  role       = aws_iam_role.web[0].name
+  policy_arn = aws_iam_policy.web[0].arn
 }

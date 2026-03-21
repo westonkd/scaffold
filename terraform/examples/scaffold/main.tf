@@ -22,7 +22,7 @@ provider "aws" {
 
 variable "aws_region" {
   type        = string
-  default     = "us-east-1"
+  default     = "us-west-2"
   description = "AWS region to deploy into"
 }
 
@@ -107,8 +107,6 @@ locals {
 }
 
 data "aws_iam_policy_document" "bucket_policy" {
-  count = length(local.allowed_role_arns) > 0 ? 1 : 0
-
   statement {
     sid    = "AllowRoleListBucket"
     effect = "Allow"
@@ -146,9 +144,8 @@ data "aws_iam_policy_document" "bucket_policy" {
 }
 
 resource "aws_s3_bucket_policy" "scaffold" {
-  count  = length(local.allowed_role_arns) > 0 ? 1 : 0
   bucket = module.s3.bucket_name
-  policy = data.aws_iam_policy_document.bucket_policy[0].json
+  policy = data.aws_iam_policy_document.bucket_policy.json
 
   depends_on = [module.s3]
 }

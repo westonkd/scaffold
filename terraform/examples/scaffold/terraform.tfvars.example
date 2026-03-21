@@ -3,10 +3,10 @@
 # IMPORTANT: Replace all ARNs below with values from your own AWS account before applying.
 
 # AWS region to deploy into
-aws_region = "us-east-1"
+aws_region = "us-west-2"
 
 # Globally unique name for the Scaffold S3 bucket
-bucket_name = "my-org-scaffold-storage"
+bucket_name = "organization-scaffold-artifacts"
 
 # IAM principal ARNs (users or roles) that may assume the CLI read/write role.
 # Typically the ARNs of engineers who run the Scaffold CLI.

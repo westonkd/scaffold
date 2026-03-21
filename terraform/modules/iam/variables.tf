@@ -21,12 +21,8 @@ variable "cli_trusted_principal_arns" {
 
 variable "web_trusted_principal_arns" {
   type        = list(string)
-  description = "Principals that may assume the web app role"
-
-  validation {
-    condition     = length(var.web_trusted_principal_arns) > 0
-    error_message = "web_trusted_principal_arns must contain at least one principal ARN."
-  }
+  description = "Principals that may assume the web app role. When empty, the web role is not created."
+  default     = []
 }
 
 variable "create_readonly_role" {

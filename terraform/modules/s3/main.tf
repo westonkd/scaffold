@@ -44,48 +44,46 @@ resource "aws_s3_bucket_public_access_block" "this" {
 }
 
 data "aws_iam_policy_document" "bucket_policy" {
-  count = length(var.allowed_role_arns) > 0 ? 1 : 0
-
-  statement {
-    sid    = "AllowRoleListBucket"
-    effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = var.allowed_role_arns
+  dynamic "statement" {
+    for_each = length(var.allowed_role_arns) > 0 ? [1] : []
+    content {
+      sid    = "AllowRoleListBucket"
+      effect = "Allow"
+      principals {
+        type        = "AWS"
+        identifiers = var.allowed_role_arns
+      }
+      actions = [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+      ]
+      resources = [aws_s3_bucket.this.arn]
     }
-
-    actions = [
-      "s3:ListBucket",
-      "s3:GetBucketLocation",
-    ]
-
-    resources = [aws_s3_bucket.this.arn]
   }
 
-  statement {
-    sid    = "AllowRoleObjectAccess"
-    effect = "Allow"
-
-    principals {
-      type        = "AWS"
-      identifiers = var.allowed_role_arns
+  dynamic "statement" {
+    for_each = length(var.allowed_role_arns) > 0 ? [1] : []
+    content {
+      sid    = "AllowRoleObjectAccess"
+      effect = "Allow"
+      principals {
+        type        = "AWS"
+        identifiers = var.allowed_role_arns
+      }
+      actions = [
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+      ]
+      resources = ["${aws_s3_bucket.this.arn}/*"]
     }
-
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-    ]
-
-    resources = ["${aws_s3_bucket.this.arn}/*"]
   }
 }
 
 resource "aws_s3_bucket_policy" "this" {
   count  = length(var.allowed_role_arns) > 0 ? 1 : 0
   bucket = aws_s3_bucket.this.id
-  policy = data.aws_iam_policy_document.bucket_policy[0].json
+  policy = data.aws_iam_policy_document.bucket_policy.json
 
   depends_on = [aws_s3_bucket_public_access_block.this]
 }
