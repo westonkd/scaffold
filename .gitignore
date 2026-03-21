@@ -2,3 +2,4 @@
 /dist
 koa.json
 /.claude
+.DS_Store
