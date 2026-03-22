@@ -37,11 +37,18 @@ enum Commands {
     /// Pull a skill from S3 and open it for editing.
     Edit {
         /// Skill name to open for editing.
-        name: String,
+        name: Option<String>,
 
         /// Print each file downloaded during the pull step.
         #[arg(long, short)]
         verbose: bool,
+    },
+
+    /// List skills.
+    List {
+        /// List all available skills in S3 instead of locally installed skills.
+        #[arg(long)]
+        remote: bool,
     },
 
     /// Pull skills from S3 into ~/.scaffold/.
@@ -105,8 +112,15 @@ async fn main() -> Result<()> {
         Commands::New { name, description, minimal, verbose } => {
             commands::new::run(&name, &description, minimal, verbose).await
         }
-        Commands::Edit { name, verbose } => {
-            commands::edit::run(&name, verbose).await
+        Commands::Edit { name, verbose } => match name {
+            Some(n) => commands::edit::run(&n, verbose).await,
+            None => {
+                eprintln!("Error: skill name is required. Usage: scaffold edit <name>");
+                std::process::exit(1);
+            }
+        },
+        Commands::List { remote } => {
+            commands::list::run(remote).await
         }
         Commands::Pull { name, verbose } => {
             commands::pull::run(name.as_deref(), verbose).await
