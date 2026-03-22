@@ -1,6 +1,7 @@
 mod commands;
 mod hoist;
 mod s3;
+mod settings;
 mod utils;
 
 use anyhow::Result;
@@ -27,6 +28,10 @@ enum Commands {
         /// Create only SKILL.md; skip reference file scaffolding.
         #[arg(long)]
         minimal: bool,
+
+        /// Print S3 region, bucket, and each uploaded file.
+        #[arg(long, short)]
+        verbose: bool,
     },
 
     /// Hoist AI agent artifacts into the current directory.
@@ -48,14 +53,37 @@ enum Commands {
         #[arg(long)]
         dry_run: bool,
     },
+
+    /// Get or set scaffold configuration values.
+    Config {
+        #[command(subcommand)]
+        subcommand: ConfigSubcommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigSubcommands {
+    /// Print the value of a configuration key.
+    Get {
+        /// Configuration key (e.g. bucket).
+        key: String,
+    },
+
+    /// Set the value of a configuration key.
+    Set {
+        /// Configuration key (e.g. bucket).
+        key: String,
+        /// Value to assign.
+        value: String,
+    },
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
-        Commands::New { name, description, minimal } => {
-            commands::new::run(&name, &description, minimal).await
+        Commands::New { name, description, minimal, verbose } => {
+            commands::new::run(&name, &description, minimal, verbose).await
         }
         Commands::Hoist { path, force } => {
             commands::hoist::run(path.as_deref(), force)
@@ -63,5 +91,9 @@ async fn main() -> Result<()> {
         Commands::Unhoist { path, dry_run } => {
             commands::unhoist::run(path.as_deref(), dry_run)
         }
+        Commands::Config { subcommand } => match subcommand {
+            ConfigSubcommands::Get { key } => commands::config::get(&key),
+            ConfigSubcommands::Set { key, value } => commands::config::set(&key, &value),
+        },
     }
 }

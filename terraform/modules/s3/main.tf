@@ -73,6 +73,7 @@ data "aws_iam_policy_document" "bucket_policy" {
       actions = [
         "s3:GetObject",
         "s3:PutObject",
+        "s3:PutObjectTagging",
         "s3:DeleteObject",
       ]
       resources = ["${aws_s3_bucket.this.arn}/*"]

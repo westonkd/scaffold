@@ -38,6 +38,7 @@ data "aws_iam_policy_document" "cli_rw" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
+      "s3:PutObjectTagging",
       "s3:DeleteObject",
     ]
     resources = [local.bucket_object_arn]
@@ -163,6 +164,7 @@ data "aws_iam_policy_document" "web" {
     actions = [
       "s3:GetObject",
       "s3:PutObject",
+      "s3:PutObjectTagging",
       "s3:DeleteObject",
     ]
     resources = [local.bucket_object_arn]

@@ -19,7 +19,8 @@ WORKDIR /workspace
 # ── dev ─────────────────────────────────────────────────────────────────────
 FROM base AS dev
 
-RUN cargo install cargo-watch --locked && cargo install cargo-edit --locked
+RUN cargo install cargo-watch --locked && cargo install cargo-edit --locked \
+ && chown -R rustdev:rustdev /usr/local/cargo
 
 USER rustdev
 

@@ -321,6 +321,12 @@ Engineers assume AWS IAM roles using existing org tooling. S3 bucket policies ar
 
 ---
 
+### scaffold edit
+
+Opens the specified project for editing
+
+
+
 ## Web Editor
 
 A web application for non-technical contributors to browse, create, and edit skills.

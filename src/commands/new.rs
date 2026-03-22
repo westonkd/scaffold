@@ -6,7 +6,7 @@ use std::pin::Pin;
 
 use crate::s3::S3Client;
 
-pub async fn run(raw_name: &str, description: &str, minimal: bool) -> Result<()> {
+pub async fn run(raw_name: &str, description: &str, minimal: bool, verbose: bool) -> Result<()> {
     let name = normalize_name(raw_name);
     validate_name(&name)?;
 
@@ -15,14 +15,19 @@ pub async fn run(raw_name: &str, description: &str, minimal: bool) -> Result<()>
         bail!("A skill named '{}' already exists locally at {}", name, skill_root.display());
     }
 
-    let client = S3Client::from_env().await?;
+    let client = S3Client::from_settings().await?;
+    if verbose {
+        eprintln!("[verbose] bucket: {}", client.bucket);
+        eprintln!("[verbose] region: {}", client.region);
+    }
+
     let skill_md_key = format!("{}/SKILL.md", name);
     if client.object_exists(&skill_md_key).await? {
         bail!("A skill named '{}' already exists.", name);
     }
 
     create_local(&skill_root, &name, description, minimal)?;
-    push_to_s3(&client, &skill_root, &name, description).await?;
+    push_to_s3(&client, &skill_root, &name, description, verbose).await?;
 
     println!("Created skill '{}' at {}", name, skill_root.display());
     Ok(())
@@ -79,18 +84,22 @@ fn skill_md_content(name: &str, description: &str) -> String {
     )
 }
 
-async fn push_to_s3(client: &S3Client, root: &Path, name: &str, description: &str) -> Result<()> {
+async fn push_to_s3(client: &S3Client, root: &Path, name: &str, description: &str, verbose: bool) -> Result<()> {
+    let skill_md_key = format!("{}/SKILL.md", name);
+    if verbose {
+        eprintln!("[verbose] uploading {}", skill_md_key);
+    }
     upload_file(
         client,
         &root.join("SKILL.md"),
-        &format!("{}/SKILL.md", name),
+        &skill_md_key,
         Some(&skill_tags(description, "")),
     )
     .await?;
 
     let refs = root.join("references");
     if refs.exists() {
-        upload_dir(client, &refs, &format!("{}/references", name)).await?;
+        upload_dir(client, &refs, &format!("{}/references", name), verbose).await?;
     }
 
     Ok(())
@@ -118,6 +127,7 @@ fn upload_dir<'a>(
     client: &'a S3Client,
     dir: &'a Path,
     prefix: &'a str,
+    verbose: bool,
 ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>> {
     Box::pin(async move {
         for entry in
@@ -129,8 +139,11 @@ fn upload_dir<'a>(
             let child_prefix = format!("{}/{}", prefix, file_name.to_string_lossy());
 
             if path.is_dir() {
-                upload_dir(client, &path, &child_prefix).await?;
+                upload_dir(client, &path, &child_prefix, verbose).await?;
             } else {
+                if verbose {
+                    eprintln!("[verbose] uploading {}", child_prefix);
+                }
                 upload_file(client, &path, &child_prefix, None).await?;
             }
         }
