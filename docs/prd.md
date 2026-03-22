@@ -321,11 +321,72 @@ Engineers assume AWS IAM roles using existing org tooling. S3 bucket policies ar
 
 ---
 
-### scaffold edit
+### `scaffold pull`
 
-Opens the specified project for editing
+Pulls skills from S3 into `~/.scaffold/`.
+
+```bash
+scaffold pull              # pull all skills in the remote bucket
+scaffold pull <name>       # pull a specific skill by name
+```
+
+**Behavior:**
+- Normalizes `<name>` (same rules as `scaffold new`)
+- Resolves which skills to pull:
+  - With `<name>`: pulls that single skill
+  - Without `<name>`: lists all top-level prefixes in the bucket and pulls each one
+- For each skill being pulled:
+  - Lists all objects under the `<name>/` prefix in S3
+  - Downloads each object to `~/.scaffold/<name>/`, creating directories as needed
+  - Overwrites any existing local files (last-write-wins)
+  - Deletes local files under `~/.scaffold/<name>/` that no longer exist in S3 (sync semantics — mirrors push behavior)
+- Always pulls fresh from S3 — no caching
+
+**Validation:**
+- With `<name>`: exits with error if `<name>/SKILL.md` does not exist in S3 (skill not found)
+- Without `<name>`: exits with an informational message if the bucket is empty (no skills found)
+
+**Output:**
+- Prints each skill pulled and the count of files downloaded
+- `--verbose` flag prints each individual file path as it is downloaded
+
+**Flags:**
+- `--verbose` / `-v`: print each file downloaded
+
+### `scaffold edit <name>`
+
+Opens the specified skill for editing. Pulls from S3 first to ensure the local copy is current.
+
+```bash
+scaffold edit <name>
+```
+
+**Behavior:**
+- Normalizes `<name>` (same rules as `scaffold new`)
+- Exits with error if the skill does not exist in S3
+- Pulls the skill from S3 into `~/.scaffold/<name>/` (identical to `scaffold pull <name>`)
+- Resolves the editor (see Editor Resolution below)
+- Opens the skill directory or `SKILL.md` (see What Is Opened below) and waits for the editor to exit
+- Does **not** push automatically after editing; use `scaffold push` to sync changes back
+
+**Editor Resolution (in priority order):**
+1. `$VISUAL` environment variable
+2. `$EDITOR` environment variable
+3. First of the following found on `PATH`: `code`, `cursor`, `zed`, `windsurf`, `nvim`, `vim`, `vi`
+4. If none found: exits with `"No editor found. Set the EDITOR environment variable."`
+
+**What Is Opened:**
+- **Directory-aware editors** — opens `~/.scaffold/<name>/` (the full skill directory):
+  `code`, `cursor`, `zed`, `windsurf`, `nvim`, `vim`, `emacs`
+- **All other editors** — opens `~/.scaffold/<name>/SKILL.md` directly
+
+The rationale: directory-aware editors show a file tree sidebar or file browser, making it natural to navigate between `SKILL.md` and reference files. Editors like `nano` or `helix` do not handle directories meaningfully, so opening `SKILL.md` directly is more useful.
+
+**Flags:**
+- `--verbose` / `-v`: passed through to the internal pull step (prints each downloaded file)
 
 
+---
 
 ## Web Editor
 

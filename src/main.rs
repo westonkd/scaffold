@@ -34,6 +34,26 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Pull a skill from S3 and open it for editing.
+    Edit {
+        /// Skill name to open for editing.
+        name: String,
+
+        /// Print each file downloaded during the pull step.
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
+    /// Pull skills from S3 into ~/.scaffold/.
+    Pull {
+        /// Skill name to pull. If omitted, pulls all skills in the bucket.
+        name: Option<String>,
+
+        /// Print each file as it is downloaded.
+        #[arg(long, short)]
+        verbose: bool,
+    },
+
     /// Hoist AI agent artifacts into the current directory.
     Hoist {
         /// Path to a workspace or plain repo directory. If omitted, reads hoist.json from cwd.
@@ -84,6 +104,12 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::New { name, description, minimal, verbose } => {
             commands::new::run(&name, &description, minimal, verbose).await
+        }
+        Commands::Edit { name, verbose } => {
+            commands::edit::run(&name, verbose).await
+        }
+        Commands::Pull { name, verbose } => {
+            commands::pull::run(name.as_deref(), verbose).await
         }
         Commands::Hoist { path, force } => {
             commands::hoist::run(path.as_deref(), force)

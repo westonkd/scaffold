@@ -90,4 +90,95 @@ impl S3Client {
 
         Ok(())
     }
+
+    pub async fn list_objects(&self, prefix: &str) -> Result<Vec<String>> {
+        let mut keys = Vec::new();
+        let mut continuation_token: Option<String> = None;
+
+        loop {
+            let mut req = self
+                .inner
+                .list_objects_v2()
+                .bucket(&self.bucket)
+                .prefix(prefix);
+
+            if let Some(token) = continuation_token {
+                req = req.continuation_token(token);
+            }
+
+            let resp = req.send().await.map_err(|e| {
+                anyhow::anyhow!("Failed to list objects in s3://{}/{}: {}", self.bucket, prefix, e)
+            })?;
+
+            for obj in resp.contents() {
+                if let Some(key) = obj.key() {
+                    keys.push(key.to_string());
+                }
+            }
+
+            if resp.is_truncated().unwrap_or(false) {
+                continuation_token = resp.next_continuation_token().map(|s| s.to_string());
+            } else {
+                break;
+            }
+        }
+
+        Ok(keys)
+    }
+
+    pub async fn list_skill_names(&self) -> Result<Vec<String>> {
+        let mut names = Vec::new();
+        let mut continuation_token: Option<String> = None;
+
+        loop {
+            let mut req = self
+                .inner
+                .list_objects_v2()
+                .bucket(&self.bucket)
+                .delimiter("/");
+
+            if let Some(token) = continuation_token {
+                req = req.continuation_token(token);
+            }
+
+            let resp = req.send().await.map_err(|e| {
+                anyhow::anyhow!("Failed to list skills in s3://{}: {}", self.bucket, e)
+            })?;
+
+            for prefix in resp.common_prefixes() {
+                if let Some(p) = prefix.prefix() {
+                    names.push(p.trim_end_matches('/').to_string());
+                }
+            }
+
+            if resp.is_truncated().unwrap_or(false) {
+                continuation_token = resp.next_continuation_token().map(|s| s.to_string());
+            } else {
+                break;
+            }
+        }
+
+        Ok(names)
+    }
+
+    pub async fn get_object(&self, key: &str) -> Result<Vec<u8>> {
+        match self.inner.get_object().bucket(&self.bucket).key(key).send().await {
+            Ok(resp) => {
+                let bytes = resp.body.collect().await.map_err(|e| {
+                    anyhow::anyhow!("Failed to read body of s3://{}/{}: {}", self.bucket, key, e)
+                })?;
+                Ok(bytes.into_bytes().to_vec())
+            }
+            Err(SdkError::ServiceError(e)) => {
+                bail!(
+                    "Failed to download s3://{}/{}: HTTP {} - {:?}",
+                    self.bucket,
+                    key,
+                    e.raw().status(),
+                    e.err()
+                )
+            }
+            Err(e) => bail!("Failed to download s3://{}/{}: {}", self.bucket, key, e),
+        }
+    }
 }
