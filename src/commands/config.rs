@@ -1,7 +1,7 @@
 use anyhow::{bail, Result};
 use crate::settings::Settings;
 
-const VALID_KEYS: &[&str] = &["bucket", "region"];
+const VALID_KEYS: &[&str] = &["bucket", "region", "api_gateway_url"];
 
 pub fn get(key: &str) -> Result<()> {
     validate_key(key)?;
@@ -9,6 +9,7 @@ pub fn get(key: &str) -> Result<()> {
     let value = match key {
         "bucket" => settings.bucket,
         "region" => settings.region,
+        "api_gateway_url" => settings.api_gateway_url,
         _ => unreachable!(),
     };
     match value {
@@ -24,6 +25,7 @@ pub fn set(key: &str, value: &str) -> Result<()> {
     match key {
         "bucket" => settings.bucket = Some(value.to_string()),
         "region" => settings.region = Some(value.to_string()),
+        "api_gateway_url" => settings.api_gateway_url = Some(value.to_string()),
         _ => unreachable!(),
     }
     settings.save()?;

@@ -3,6 +3,7 @@ pub mod edit;
 pub mod hoist;
 pub mod link;
 pub mod list;
+pub mod login;
 pub mod new;
 pub mod pull;
 pub mod unhoist;

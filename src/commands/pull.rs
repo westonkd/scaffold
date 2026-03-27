@@ -3,10 +3,10 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::s3::S3Client;
+use crate::storage::StorageClient;
 
 pub async fn run(name: Option<&str>, verbose: bool) -> Result<()> {
-    let client = S3Client::from_settings().await?;
+    let client = StorageClient::from_settings().await?;
 
     match name {
         Some(raw) => {
@@ -41,7 +41,7 @@ fn skill_dir(name: &str) -> Result<PathBuf> {
     Ok(scaffold_dir()?.join(name))
 }
 
-async fn pull_skill(client: &S3Client, name: &str, verbose: bool) -> Result<()> {
+async fn pull_skill(client: &StorageClient, name: &str, verbose: bool) -> Result<()> {
     let skill_md_key = format!("{}/SKILL.md", name);
     if !client.object_exists(&skill_md_key).await? {
         bail!("Skill '{}' not found in S3.", name);

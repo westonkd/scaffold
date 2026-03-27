@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::s3::S3Client;
+use crate::storage::StorageClient;
 
 struct SkillInfo {
     name: String,
@@ -67,7 +67,7 @@ fn list_local() -> Result<Vec<SkillInfo>> {
 }
 
 async fn list_remote() -> Result<Vec<SkillInfo>> {
-    let client = S3Client::from_settings().await?;
+    let client = StorageClient::from_settings().await?;
     let names = client.list_skill_names().await?;
 
     let mut skills = vec![];

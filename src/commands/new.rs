@@ -4,7 +4,7 @@ use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
-use crate::s3::S3Client;
+use crate::storage::StorageClient;
 
 pub async fn run(raw_name: &str, description: &str, minimal: bool, verbose: bool) -> Result<()> {
     let name = normalize_name(raw_name);
@@ -15,10 +15,9 @@ pub async fn run(raw_name: &str, description: &str, minimal: bool, verbose: bool
         bail!("A skill named '{}' already exists locally at {}", name, skill_root.display());
     }
 
-    let client = S3Client::from_settings().await?;
+    let client = StorageClient::from_settings().await?;
     if verbose {
-        eprintln!("[verbose] bucket: {}", client.bucket);
-        eprintln!("[verbose] region: {}", client.region);
+        eprintln!("[verbose] {}", client.describe());
     }
 
     let skill_md_key = format!("{}/SKILL.md", name);
@@ -84,7 +83,7 @@ fn skill_md_content(name: &str, description: &str) -> String {
     )
 }
 
-async fn push_to_s3(client: &S3Client, root: &Path, name: &str, description: &str, verbose: bool) -> Result<()> {
+async fn push_to_s3(client: &StorageClient, root: &Path, name: &str, description: &str, verbose: bool) -> Result<()> {
     let skill_md_key = format!("{}/SKILL.md", name);
     if verbose {
         eprintln!("[verbose] uploading {}", skill_md_key);
@@ -124,7 +123,7 @@ fn urlencoding_simple(s: &str) -> String {
 }
 
 fn upload_dir<'a>(
-    client: &'a S3Client,
+    client: &'a StorageClient,
     dir: &'a Path,
     prefix: &'a str,
     verbose: bool,
@@ -151,7 +150,7 @@ fn upload_dir<'a>(
     })
 }
 
-async fn upload_file(client: &S3Client, path: &Path, key: &str, tags: Option<&str>) -> Result<()> {
+async fn upload_file(client: &StorageClient, path: &Path, key: &str, tags: Option<&str>) -> Result<()> {
     let body = fs::read(path).context(format!("Failed to read {}", path.display()))?;
     let content_type = if path.extension().and_then(|e| e.to_str()) == Some("md") {
         "text/markdown"

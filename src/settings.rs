@@ -6,6 +6,8 @@ use std::path::PathBuf;
 pub struct Settings {
     pub bucket: Option<String>,
     pub region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_gateway_url: Option<String>,
 }
 
 impl Settings {
@@ -73,7 +75,7 @@ mod tests {
     fn save_writes_bucket_to_file() {
         let dir = TempDir::new().unwrap();
         let path = settings_path(&dir);
-        let settings = Settings { bucket: Some("my-bucket".to_string()), region: None };
+        let settings = Settings { bucket: Some("my-bucket".to_string()), region: None, api_gateway_url: None };
         settings.save_to(&path).unwrap();
         let contents = std::fs::read_to_string(&path).unwrap();
         assert_eq!(contents, r#"{"bucket":"my-bucket","region":null}"#);
@@ -83,7 +85,7 @@ mod tests {
     fn save_creates_parent_directory() {
         let dir = TempDir::new().unwrap();
         let path = dir.path().join("nested").join("dir").join("settings.json");
-        let settings = Settings { bucket: Some("my-bucket".to_string()), region: None };
+        let settings = Settings { bucket: Some("my-bucket".to_string()), region: None, api_gateway_url: None };
         settings.save_to(&path).unwrap();
         assert!(path.exists());
     }
@@ -101,7 +103,7 @@ mod tests {
     fn roundtrip_preserves_bucket() {
         let dir = TempDir::new().unwrap();
         let path = settings_path(&dir);
-        let original = Settings { bucket: Some("roundtrip-bucket".to_string()), region: None };
+        let original = Settings { bucket: Some("roundtrip-bucket".to_string()), region: None, api_gateway_url: None };
         original.save_to(&path).unwrap();
         let loaded = Settings::load_from(&path).unwrap();
         assert_eq!(loaded.bucket, original.bucket);

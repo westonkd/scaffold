@@ -1,7 +1,9 @@
 mod commands;
+mod credentials;
 mod hoist;
 mod s3;
 mod settings;
+mod storage;
 mod utils;
 
 use anyhow::Result;
@@ -96,6 +98,17 @@ enum Commands {
         #[command(subcommand)]
         subcommand: ConfigSubcommands,
     },
+
+    /// Store or clear the API Gateway access token.
+    Login {
+        /// Token to store. If omitted, reads from stdin.
+        #[arg(long)]
+        token: Option<String>,
+
+        /// Remove the stored token.
+        #[arg(long)]
+        clear: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -148,5 +161,8 @@ async fn main() -> Result<()> {
             ConfigSubcommands::Get { key } => commands::config::get(&key),
             ConfigSubcommands::Set { key, value } => commands::config::set(&key, &value),
         },
+        Commands::Login { token, clear } => {
+            commands::login::run(token.as_deref(), clear)
+        }
     }
 }
