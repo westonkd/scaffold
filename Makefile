@@ -1,4 +1,4 @@
-.PHONY: help build dev watch test fmt clippy release clean clean-volumes build-authorizer
+.PHONY: help build dev watch test fmt clippy release clean clean-volumes build-authorizer build-s3-proxy
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -37,3 +37,9 @@ build-authorizer: ## Build the Lambda authorizer zip (required before terraform 
 		--target export \
 		--output type=local,dest=lambda/authorizer/dist \
 		lambda/authorizer
+
+build-s3-proxy: ## Build the Lambda S3 proxy zip (required before terraform plan with enable_apigw=true)
+	docker build \
+		--target export \
+		--output type=local,dest=lambda/s3-proxy/dist \
+		lambda/s3-proxy

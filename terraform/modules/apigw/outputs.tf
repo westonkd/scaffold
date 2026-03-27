@@ -13,7 +13,7 @@ output "authorizer_function_arn" {
   description = "ARN of the Lambda authorizer function"
 }
 
-output "apigw_s3_role_arn" {
-  value       = aws_iam_role.apigw_s3.arn
-  description = "ARN of the IAM role used by API Gateway to access S3 (add to bucket policy)"
+output "s3_proxy_role_arn" {
+  value       = aws_iam_role.s3_proxy_lambda.arn
+  description = "ARN of the S3 proxy Lambda execution role (add to bucket policy)"
 }

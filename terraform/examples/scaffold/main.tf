@@ -149,7 +149,7 @@ locals {
       module.iam.cli_ro_role_arn,
       module.iam.web_role_arn,
     ],
-    var.enable_apigw ? [module.apigw[0].apigw_s3_role_arn] : [],
+    var.enable_apigw ? [module.apigw[0].s3_proxy_role_arn] : [],
   ))
 }
 
