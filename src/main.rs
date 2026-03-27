@@ -61,6 +61,16 @@ enum Commands {
         verbose: bool,
     },
 
+    /// Link a skill into the current working directory.
+    Link {
+        /// Skill name to link. If omitted, links all scopes from .scaffold-artifacts.
+        name: Option<String>,
+
+        /// Replace existing symlinks.
+        #[arg(long, short)]
+        force: bool,
+    },
+
     /// Hoist AI agent artifacts into the current directory.
     Hoist {
         /// Path to a workspace or plain repo directory. If omitted, reads hoist.json from cwd.
@@ -124,6 +134,9 @@ async fn main() -> Result<()> {
         }
         Commands::Pull { name, verbose } => {
             commands::pull::run(name.as_deref(), verbose).await
+        }
+        Commands::Link { name, force } => {
+            commands::link::run(name.as_deref(), force)
         }
         Commands::Hoist { path, force } => {
             commands::hoist::run(path.as_deref(), force)

@@ -38,7 +38,7 @@ This PRD represents a deliberate redesign of the scaffold CLI. There is no backw
 ## Non-Goals
 
 - Agent activation / skill invocation mechanics (handled by the agent framework)
-- CLI authentication mechanics (engineers assume AWS IAM roles via existing org tooling)
+- IdP configuration or VPN infrastructure (both are operated externally; scaffold consumes them)
 - Change notifications or real-time collaboration (users implement their own; e.g., a session-start hook)
 - Versioning UI / rollback UX (S3 versioning is enabled from day one as a safety net; user-facing rollback is deferred)
 - Per-project access control (all authenticated users can read and write all skills for now)
@@ -104,7 +104,7 @@ metadata:
   depends-on: platform
 ```
 
-`scaffold sync` resolves `depends-on` declarations and pulls transitive dependencies automatically.
+`scaffold pull` and `scaffold link` both resolve `depends-on` declarations and pull/link transitive dependencies automatically.
 
 ### Skill Frontmatter
 
@@ -187,17 +187,18 @@ Engineers interact with artifacts via `scaffold` commands. `hoist` functionality
 
 ### Settings: `~/.scaffold/settings.json`
 
-All CLI commands that interact with S3 read the S3 bucket name from `~/.scaffold/settings.json`. This file is the single source of truth for machine-level scaffold configuration.
+All CLI commands that interact with S3 read the S3 bucket name and API Gateway endpoint from `~/.scaffold/settings.json`. This file is the single source of truth for machine-level scaffold configuration. Auth tokens are stored separately in the OS credential store, not in this file.
 
 **Format:**
 ```json
 {
-  "bucket": "my-org-scaffold-artifacts"
+  "bucket": "my-org-scaffold-artifacts",
+  "api_gateway_url": "https://api.example.com/scaffold"
 }
 ```
 
 **Behavior:**
-- Any command that requires S3 access exits with a clear error if `~/.scaffold/settings.json` is missing or if `bucket` is not set
+- Any command that requires S3 access exits with a clear error if `~/.scaffold/settings.json` is missing or if `bucket` or `api_gateway_url` is not set
 - The file is created manually by the engineer (or by org tooling) during initial setup; no scaffold command writes it automatically
 - All other `~/.scaffold/` contents (skill directories, etc.) coexist with this file
 
@@ -243,7 +244,8 @@ scaffold init
 - Creates a `.scaffold-artifacts` config file in the current directory
 - Prompts the engineer to select which scopes apply (from available skills listed in S3)
 - `.scaffold-artifacts` is the **only** artifact-related file that ever gets committed to a repo
-- OSS repos: no `.scaffold-artifacts` file; nothing is ever synced or committed
+- OSS repos: no `.scaffold-artifacts` file; nothing is ever linked or committed
+- This file is the setup step for `scaffold link` (no-arg mode)
 
 **Config format:**
 ```yaml
@@ -252,24 +254,6 @@ scopes:
   - payments
   - platform
 ```
-
----
-
-### `scaffold sync`
-
-Pulls skills from S3 and links them into the current repository.
-
-```bash
-scaffold sync
-```
-
-**Behavior:**
-- Reads `.scaffold-artifacts` to determine which scopes to pull
-- Resolves `depends-on` declarations and pulls transitive dependencies
-- Always pulls fresh from S3 — no cache, no TTL
-- Stores skills in `~/.scaffold/` (shared across all repos on the machine)
-- Composes `hoist` to symlink skills into the current repo and add them to `.git/info/exclude` (never committed, invisible to git)
-- If no `.scaffold-artifacts` found: exits with hint — `"No .scaffold-artifacts found. Run scaffold init to configure this repository."`
 
 ---
 
@@ -282,7 +266,35 @@ scaffold list           # skills currently installed in ~/.scaffold
 scaffold list --remote  # all available skills in S3 (requires IAM role)
 ```
 
-Output columns: name, type, status, scope.
+Output columns (in order): **name**, **linked** (is the skill linked into the CWD via `scaffold link`?), **description**. Linked skills are shown first, followed by unlinked. Remote-only skills (`--remote`) always show as unlinked.
+
+---
+
+### `scaffold link [<name>]`
+
+Links one or all locally-installed skills into the current working directory via symlink.
+
+```bash
+scaffold link <name>   # link a specific skill
+scaffold link          # link all scopes from .scaffold-artifacts
+```
+
+**Behavior:**
+- With `<name>`:
+  - Normalizes `<name>` (same rules as `scaffold new`)
+  - Exits with error if the skill does not exist in `~/.scaffold/` (hint: run `scaffold pull <name>` first)
+  - Creates a symlink from the current working directory into `~/.scaffold/<name>/` using the agent skills strategy
+  - Adds the symlink path to `.git/info/exclude` so it is never committed
+  - Idempotent: running twice on the same skill in the same directory is a no-op
+
+- Without `<name>`:
+  - Reads `.scaffold-artifacts` to determine which scopes to link
+  - Exits with hint if no `.scaffold-artifacts` found: `"No .scaffold-artifacts found. Run scaffold init to configure this repository."`
+  - Links each configured scope (same behavior as with `<name>`, one per scope)
+  - Resolves `depends-on` declarations and links transitive dependencies
+
+**Flags:**
+- `--force` / `-f`: replace existing symlinks (handles stale links)
 
 ---
 
@@ -291,14 +303,39 @@ Output columns: name, type, status, scope.
 Gets and sets values in `~/.scaffold/settings.json`.
 
 ```bash
-scaffold config get bucket               # prints the current bucket name
-scaffold config set bucket <bucket-name> # sets the bucket name
+scaffold config get bucket                            # prints the current bucket name
+scaffold config set bucket <bucket-name>              # sets the bucket name
+scaffold config get api_gateway_url                   # prints the current API Gateway URL
+scaffold config set api_gateway_url <url>             # sets the API Gateway URL
 ```
 
 **Behavior:**
 - `get <key>`: prints the value for the given key; exits with error if the key is not set
 - `set <key> <value>`: writes the value for the given key to `~/.scaffold/settings.json`, creating the file if it does not exist
 - Unknown keys are rejected with an error listing valid keys
+- Valid keys: `bucket`, `api_gateway_url`
+
+---
+
+### `scaffold login`
+
+Explicitly initiates the device authorization flow to authenticate with the Instructure identity service.
+
+```bash
+scaffold login
+```
+
+**Behavior:**
+- Initiates the device authorization flow: prints a verification URL and user code
+- Polls the identity service until the engineer completes the browser flow or the code expires
+- On success: stores the token securely in the OS credential store and prints a confirmation
+- On failure / timeout: exits with a clear error message
+- If a valid, refreshable token already exists: prints a confirmation and exits without re-authenticating (use `--force` to re-authenticate anyway)
+
+**Flags:**
+- `--force` / `-f`: discard any existing token and re-authenticate
+
+This command is optional for day-to-day use — authentication happens lazily on the first S3 operation. `scaffold login` is useful for pre-authenticating before going into an environment where browser access is unavailable.
 
 ---
 
@@ -317,7 +354,31 @@ For engineers who prefer editing locally and syncing up. Syncs the full skill di
 
 ### Authentication
 
-Engineers assume AWS IAM roles using existing org tooling. S3 bucket policies are attached to those roles. No separate auth system is needed for the CLI. The mechanics of role assumption are out of scope.
+All CLI commands that interact with S3 do so through an AWS API Gateway. The API Gateway uses a custom authorizer that validates JWTs and enforces VPN-only access. Engineers never interact with S3 directly.
+
+**Token acquisition:**
+- Tokens are fetched from the Instructure identity service using the OAuth 2.0 device authorization flow (RFC 8628)
+- Tokens are long-lived (weeks) to minimize re-authentication friction
+- Token refresh happens transparently; the engineer is only prompted to re-authenticate when the token cannot be refreshed
+
+**Token storage:**
+- Tokens are stored securely in the OS credential store (Keychain on macOS, Secret Service on Linux, Credential Manager on Windows)
+- No tokens are written to `~/.scaffold/settings.json` or any plain-text file
+
+**Lazy authorization:**
+- Authentication is not required at CLI startup
+- The CLI defers token validation until the moment a command attempts to interact with an AWS resource (API Gateway / S3)
+- Commands that operate only on local state (e.g., `scaffold link`, `scaffold config get`) never trigger authentication
+
+**Auth flow (first use or expired token):**
+1. CLI detects a missing or unrefreshable token when an S3 operation is about to be made
+2. CLI initiates the device authorization flow: prints a URL and user code, then polls for completion
+3. Engineer opens the URL in a browser, authenticates with the org IdP, and approves the device
+4. CLI receives and securely stores the token, then proceeds with the original command
+
+**VPN enforcement:**
+- The API Gateway custom authorizer rejects requests that do not originate from the company VPN, in addition to validating the JWT
+- Engineers on the public internet cannot interact with S3 regardless of token validity
 
 ---
 
@@ -471,8 +532,9 @@ MIT license. Self-hosting is free for any organization. A hosted SaaS offering m
 | Surface | Mechanism |
 |---|---|
 | Web editor | SAML |
-| CLI | AWS IAM role (assumed via existing eng tooling) |
-| S3 bucket | IAM policies attached to roles |
+| CLI | JWT via Instructure identity service (device authorization OIDC flow); token stored in OS credential store |
+| API Gateway | Custom authorizer validates JWT + enforces VPN origin |
+| S3 bucket | API Gateway IAM role; engineers never access S3 directly |
 
 ---
 
@@ -487,7 +549,7 @@ The CLI and web app do not share a library. Each has its own implementation of o
 | Phase | Deliverable | Unlocks |
 |---|---|---|
 | 1 | S3 bucket + skill structure; create `platform` skill with real ADRs | Validates format end-to-end |
-| 2 | `scaffold init` + `scaffold sync` | Unblocks engineers immediately |
+| 2 | `scaffold init` + `scaffold pull` + `scaffold link` | Unblocks engineers immediately |
 | 3 | `scaffold list` | Local and remote skill discovery |
 | 4 | `scaffold push` | Local editing workflow for engineers |
 | 5 | Web editor (browse + edit first; new skill wizard second pass) | Non-technical contributor on-ramp |

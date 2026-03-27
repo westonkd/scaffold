@@ -39,3 +39,19 @@ tags = {
   Project     = "scaffold"
   Environment = "production"
 }
+
+# Optional: enable the API Gateway with Lambda authorizer.
+# When enabled, all S3 access flows through the API Gateway.
+# The api_endpoint output is used as api_gateway_url in ~/.scaffold/settings.json.
+#
+# PREREQUISITE: build the Lambda zip before running terraform plan:
+#   make build-authorizer
+#
+# enable_apigw = true
+# jwks_uri     = "https://your-idp.example.com/.well-known/jwks.json"
+# jwt_issuer   = "https://your-idp.example.com/"
+# jwt_audience = "scaffold-api"
+#
+# Optional: restrict access to VPN IP ranges. Empty list disables VPN enforcement.
+# Use specific CIDR prefixes (/8 through /32). The /0 prefix is rejected.
+# vpn_cidr_blocks = ["10.0.0.0/8", "192.168.1.0/24"]

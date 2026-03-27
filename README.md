@@ -1,85 +1,167 @@
-# 🏗️ scaffold
+# scaffold
 
-A collection of tools for composing multi-repo development environments and managing AI agent artifacts.
+Manage AI context artifacts (PRDs, ADRs, tech plans) across an engineering organization. Skills are stored in a private S3 bucket and linked into repos on demand — never committed.
 
 > [!IMPORTANT]
-> Scaffold tools are experimental. They represent patterns I'm testing and refining.
+> Scaffold is experimental. APIs and formats may change.
 
-## Tools
+---
 
-### hoist
+## Installation
 
-Hoist AI agent artifacts (Claude Code skills, etc.) from repos into your current directory.
-
-#### Installation
-
-```bash
-brew install westonkd/hoist/hoist
-```
-
-Or build from source:
+Build from source:
 
 ```bash
 cargo build --release
-cp target/release/hoist ~/.local/bin/
+cp target/release/scaffold ~/.local/bin/
 ```
 
-#### Usage
+---
 
-##### With a path argument
+## Configuration
+
+All commands that access S3 require a bucket to be configured:
 
 ```bash
-hoist ./some-repo
+scaffold config set bucket my-org-scaffold-artifacts
 ```
 
-##### With a `hoist.json` config
+Settings are stored in `~/.scaffold/settings.json`.
 
-Create `hoist.json` in your working directory:
+---
 
-```json
-{
-  "roots": [
-    "./canvas-lms",
-    "./my-other-repo"
-  ]
-}
-```
+## Commands
 
-Then run:
+### `scaffold new <name>`
+
+Create a new skill and push it to S3.
 
 ```bash
-hoist
+scaffold new payments
+scaffold new payments --description "Payment processing platform"
+scaffold new payments --minimal   # SKILL.md only, no reference files
 ```
 
-##### Removing hoisted artifacts
+### `scaffold pull [<name>]`
 
-Remove all artifacts from a specific repo:
+Download skills from S3 into `~/.scaffold/`.
 
 ```bash
-hoist unhoist ./some-repo
+scaffold pull              # pull all skills in the bucket
+scaffold pull payments     # pull a specific skill
 ```
 
-Or prune any artifacts whose source is no longer listed in `hoist.json`:
+### `scaffold link [<name>]`
+
+Link a skill into the current working directory via symlink. The symlink is placed at `.claude/skills/<name>` and added to `.git/info/exclude` so it is never committed.
 
 ```bash
-hoist unhoist
+scaffold link payments     # link a specific skill
+scaffold link              # link all scopes from .scaffold-artifacts (see below)
+scaffold link --force      # replace existing symlinks
 ```
 
-Pass `--dry-run` to preview what would be removed without touching anything:
+`scaffold link` without an argument reads `.scaffold-artifacts` from the current directory. Create this file manually to configure which skills are linked in a given repo:
+
+```yaml
+# .scaffold-artifacts
+scopes:
+  - payments
+  - platform
+```
+
+This is the only scaffold-related file that should be committed to a repository. Running `scaffold link` will link each listed scope and automatically resolve any `depends-on` dependencies declared in a skill's frontmatter.
+
+**Typical workflow for a new repo:**
 
 ```bash
-hoist unhoist --dry-run
+# 1. Create .scaffold-artifacts listing the skills you want
+cat > .scaffold-artifacts << 'EOF'
+scopes:
+  - payments
+  - platform
+EOF
+
+# 2. Pull the skills from S3
+scaffold pull payments
+scaffold pull platform
+
+# 3. Link them into this repo
+scaffold link
 ```
 
-#### The Problems
+### `scaffold list`
 
-**1. Agents don't reliably discover nested artifacts.**
-LLM agents often miss skills, `AGENTS.md` files, and other artifacts when they're buried in sub-directories across many repos. `hoist` surfaces them to a common root where agents can find them consistently.
+List locally installed skills and their link status in the current directory.
 
-**2. Artifacts belong near the code, but may need proprietary context.**
-The most useful agent artifacts are specific to a codebase — but adding proprietary instructions or context to an open-source repo isn't always appropriate. With `hoist`, you can keep those artifacts in a separate closed-source repo and hoist them alongside the OSS code at runtime, keeping source and context cleanly separated.
+```bash
+scaffold list           # locally installed skills (~/.scaffold/)
+scaffold list --remote  # all skills available in S3
+```
 
-#### Documentation
+Output shows name, whether the skill is linked in the current directory, and description. Linked skills appear first.
 
-- [Command reference](docs/commands.md)
-- [How it works in depth](docs/how-it-works.md)
+### `scaffold push [<name>]`
+
+Push local skill changes back to S3.
+
+```bash
+scaffold push              # push all locally modified skills
+scaffold push payments     # push a specific skill
+```
+
+### `scaffold edit <name>`
+
+Pull a skill from S3 and open it for editing.
+
+```bash
+scaffold edit payments
+```
+
+Opens the skill directory in `$VISUAL` or `$EDITOR`. Does not push automatically — run `scaffold push` when done.
+
+### `scaffold config`
+
+Get or set configuration values.
+
+```bash
+scaffold config get bucket
+scaffold config set bucket my-org-scaffold-artifacts
+```
+
+---
+
+## Skill format
+
+Each skill is a directory in `~/.scaffold/<name>/`:
+
+```
+payments/
+├── SKILL.md                    # frontmatter + executive summary
+├── references/
+│   ├── prd.md
+│   ├── tech-plan.md
+│   └── adrs/
+│       └── payment-processor-selection.md
+└── assets/
+    └── architecture-diagram.png
+```
+
+`SKILL.md` frontmatter:
+
+```yaml
+---
+name: payments
+description: >
+  Context for the payments platform. Use when working on payment
+  processing, billing, or any integration with payment providers.
+metadata:
+  type: project
+  status: active
+  scope: repo-payments, repo-billing
+  depends-on: platform
+  tags: payments, billing, fintech
+---
+```
+
+The `depends-on` field causes `scaffold link` to automatically link the referenced skill as well.

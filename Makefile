@@ -1,4 +1,4 @@
-.PHONY: help build dev watch test fmt clippy release clean clean-volumes
+.PHONY: help build dev watch test fmt clippy release clean clean-volumes build-authorizer
 
 help: ## List available targets
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -31,3 +31,9 @@ clean: ## Run cargo clean and remove dist/ binary
 
 clean-volumes: ## Remove Docker volumes (nukes cargo caches)
 	docker compose down -v
+
+build-authorizer: ## Build the Lambda authorizer zip (required before terraform plan with enable_apigw=true)
+	docker build \
+		--target export \
+		--output type=local,dest=lambda/authorizer/dist \
+		lambda/authorizer
