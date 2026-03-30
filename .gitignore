@@ -3,3 +3,6 @@
 koa.json
 /.claude
 .DS_Store
+**/.terraform/
+*.tfstate
+*.tfstate.backup

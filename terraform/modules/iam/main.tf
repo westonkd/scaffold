@@ -14,13 +14,37 @@ locals {
 # --- scaffold_cli_rw ---
 
 data "aws_iam_policy_document" "cli_rw_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRole"]
+  dynamic "statement" {
+    for_each = length(var.cli_trusted_principal_arns) > 0 ? [1] : []
+    content {
+      effect  = "Allow"
+      actions = ["sts:AssumeRole"]
+      principals {
+        type        = "AWS"
+        identifiers = var.cli_trusted_principal_arns
+      }
+    }
+  }
 
-    principals {
-      type        = "AWS"
-      identifiers = var.cli_trusted_principal_arns
+  dynamic "statement" {
+    for_each = (var.github_oidc_provider_arn != null && length(var.github_oidc_subjects) > 0) ? [1] : []
+    content {
+      effect  = "Allow"
+      actions = ["sts:AssumeRoleWithWebIdentity"]
+      principals {
+        type        = "Federated"
+        identifiers = [var.github_oidc_provider_arn]
+      }
+      condition {
+        test     = "StringLike"
+        variable = "token.actions.githubusercontent.com:sub"
+        values   = var.github_oidc_subjects
+      }
+      condition {
+        test     = "StringEquals"
+        variable = "token.actions.githubusercontent.com:aud"
+        values   = ["sts.amazonaws.com"]
+      }
     }
   }
 }

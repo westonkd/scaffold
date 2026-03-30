@@ -39,7 +39,13 @@ variable "name_prefix" {
 
 variable "ci_trusted_principal_arns" {
   type        = list(string)
-  description = "IAM principal ARNs for CI (e.g. GitHub Actions runner role) — granted read/write S3 access"
+  default     = []
+  description = "IAM principal ARNs for CI that may assume the read/write role via sts:AssumeRole. Optional when github_oidc_subjects is set."
+}
+
+variable "github_oidc_subjects" {
+  type        = list(string)
+  description = "GitHub OIDC sub claims for CI. Example: [\"repo:your-org/agent-skills:ref:refs/heads/main\"]. Creates a github-oidc provider and configures federated trust on the ci_rw role."
 }
 
 variable "agent_trusted_principal_arns" {
@@ -72,6 +78,11 @@ variable "tags" {
   description = "Tags applied to all resources"
 }
 
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+  tags   = var.tags
+}
+
 # The s3 module is called without allowed_role_arns here because the role ARNs
 # are not yet known — they are created by the iam module below. The bucket
 # policy is applied at root level after both modules resolve, avoiding the
@@ -90,6 +101,8 @@ module "iam" {
   bucket_arn                 = module.s3.bucket_arn
   name_prefix                = var.name_prefix
   cli_trusted_principal_arns = var.ci_trusted_principal_arns
+  github_oidc_provider_arn   = module.github_oidc.oidc_provider_arn
+  github_oidc_subjects       = var.github_oidc_subjects
   web_trusted_principal_arns = var.web_trusted_principal_arns
   create_readonly_role       = length(var.agent_trusted_principal_arns) > 0
   kms_key_arn                = var.kms_key_arn

@@ -1,6 +1,28 @@
 # Terraform Reference
 
-Two reusable modules cover the core infrastructure. Both are independently deployable.
+Three reusable modules cover the core infrastructure. All are independently deployable.
+
+---
+
+## `modules/github-oidc`
+
+Creates the GitHub Actions OIDC provider in AWS IAM. This is account-level infrastructure — only one provider per AWS account is allowed. Providing it as a standalone module lets adopters skip it if the provider already exists (e.g., managed elsewhere in their Terraform).
+
+### Resources
+
+- `aws_iam_openid_connect_provider` — OIDC provider for `https://token.actions.githubusercontent.com`
+
+### Variables
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `tags` | `map(string)` | No | `{}` | Resource tags. |
+
+### Outputs
+
+| Name | Description |
+|---|---|
+| `oidc_provider_arn` | ARN of the GitHub OIDC provider. Pass to `modules/iam` as `github_oidc_provider_arn`. |
 
 ---
 
@@ -55,7 +77,9 @@ Creates IAM roles for the three principals that access the bucket.
 |---|---|---|---|---|
 | `bucket_arn` | `string` | Yes | — | ARN of the S3 bucket (from `module.s3.bucket_arn`). |
 | `name_prefix` | `string` | No | `"scaffold"` | Prefix for role and policy names. |
-| `cli_trusted_principal_arns` | `list(string)` | Yes | — | Principals that may assume the `cli_rw` role (e.g., GitHub Actions runner role ARN). |
+| `cli_trusted_principal_arns` | `list(string)` | No | `[]` | IAM principals that may assume the `cli_rw` role via `sts:AssumeRole`. Optional when `github_oidc_subjects` is set. |
+| `github_oidc_provider_arn` | `string` | No | `null` | ARN of the GitHub Actions OIDC provider (from `modules/github-oidc`). When set alongside `github_oidc_subjects`, adds federated trust to the `cli_rw` role. |
+| `github_oidc_subjects` | `list(string)` | No | `[]` | OIDC `sub` claims trusted by the `cli_rw` role. Example: `["repo:your-org/agent-skills:ref:refs/heads/main"]`. Supports wildcards. At least one of `cli_trusted_principal_arns` or `github_oidc_subjects` must be non-empty. |
 | `web_trusted_principal_arns` | `list(string)` | No | `[]` | Principals that may assume the `web` role. When empty, the role is not created. |
 | `create_readonly_role` | `bool` | No | `false` | Whether to create the `cli_ro` role for cloud agents. |
 | `kms_key_arn` | `string` | No | `null` | KMS key ARN. When set, KMS permissions are added to the `cli_rw` and `web` policies. |
@@ -79,15 +103,21 @@ Creates IAM roles for the three principals that access the bucket.
 ### Usage
 
 ```hcl
+module "github_oidc" {
+  source = "../../modules/github-oidc"
+  tags   = var.tags
+}
+
 module "s3" {
-  source = "../../modules/s3"
+  source      = "../../modules/s3"
   bucket_name = var.bucket_name
 }
 
 module "iam" {
   source                     = "../../modules/iam"
   bucket_arn                 = module.s3.bucket_arn
-  cli_trusted_principal_arns = var.ci_trusted_principal_arns
+  github_oidc_provider_arn   = module.github_oidc.oidc_provider_arn
+  github_oidc_subjects       = var.github_oidc_subjects
   create_readonly_role       = length(var.agent_trusted_principal_arns) > 0
   web_trusted_principal_arns = var.web_trusted_principal_arns
 }
@@ -98,8 +128,8 @@ module "iam" {
 ```hcl
 bucket_name = "acme-scaffold-skills"
 
-ci_trusted_principal_arns = [
-  "arn:aws:iam::123456789012:role/github-actions-runner"
+github_oidc_subjects = [
+  "repo:your-org/agent-skills:ref:refs/heads/main"
 ]
 
 agent_trusted_principal_arns = [
@@ -120,11 +150,13 @@ tags = {
 
 ## Self-hosting checklist
 
-1. Create an S3-compatible bucket (`modules/s3`)
-2. Create IAM roles (`modules/iam`):
-   - `cli_trusted_principal_arns` → your CI runner's IAM role
-   - `agent_trusted_principal_arns` → your cloud agent compute role(s)
-   - `web_trusted_principal_arns` → your web app backend role (v2 only)
-3. Configure the skills git repo with branch protection and required CI status checks (see [PRD](prd.md) — `github` Terraform module, not yet implemented)
-4. Set up CI to validate and sync on every push to `main` (see [PRD](prd.md) — CI: Validate and Sync)
-5. Distribute `hooks/post-merge` to service repos via `install.sh` or a `postinstall` npm script
+1. Create the GitHub Actions OIDC provider (`modules/github-oidc`) — once per AWS account
+2. Create an S3 bucket (`modules/s3`)
+3. Create IAM roles (`modules/iam`):
+   - `github_oidc_provider_arn` + `github_oidc_subjects` → CI (GitHub Actions) federated access
+   - `agent_trusted_principal_arns` → your cloud agent compute role(s) (optional)
+   - `web_trusted_principal_arns` → your web app backend role (v2 only, optional)
+4. Set the `ci_rw_role_arn` output as `CI_ROLE_ARN` in your skills repo's GitHub Actions secrets
+5. Configure the skills git repo with branch protection and required CI status checks (see [PRD](prd.md))
+6. Set up CI to validate and sync on every push to `main` (see [Skills Repository](skills-repo.md) — CI: validate and sync)
+7. Distribute `hooks/post-merge` to service repos via `install.sh` or a `postinstall` npm script
