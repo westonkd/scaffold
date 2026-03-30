@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+SETTINGS_FILE="$HOME/.scaffold/settings.json"
+SKILLS_DIR="$HOME/.scaffold/agent-skills"
+SCAFFOLD_CONFIG="scaffold.json"
+
+_scaffold_log()  { echo "[scaffold] $*"; }
+_scaffold_warn() { echo "[scaffold] WARNING: $*" >&2; }
+_scaffold_err()  { echo "[scaffold] ERROR: $*" >&2; }
+
+# Always operate from the repo root, regardless of where the hook is invoked
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  _scaffold_err "Not in a git repository."
+  exit 0
+fi
+cd "$REPO_ROOT" || exit 0
+
+SKILLS_REPO=""
+
+if [ -f "$SETTINGS_FILE" ]; then
+  SKILLS_REPO=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$SETTINGS_FILE'))
+    print(d.get('skills_repo', ''))
+except Exception:
+    print('', end='')
+" 2>/dev/null)
+fi
+
+if [ -z "$SKILLS_REPO" ] && [ -n "$SCAFFOLD_SKILLS_REPO" ]; then
+  SKILLS_REPO="$SCAFFOLD_SKILLS_REPO"
+fi
+
+if [ -z "$SKILLS_REPO" ]; then
+  _scaffold_err "skills_repo not configured. Set it in ~/.scaffold/settings.json or SCAFFOLD_SKILLS_REPO env var."
+  exit 0
+fi
+
+_scaffold_log "Updating skills..."
+
+if [ ! -d "$SKILLS_DIR/.git" ]; then
+  if ! git clone "$SKILLS_REPO" "$SKILLS_DIR" 2>&1; then
+    _scaffold_err "Failed to clone skills repo ($SKILLS_REPO). Skills not updated."
+    exit 0
+  fi
+else
+  if ! git -C "$SKILLS_DIR" pull --rebase --quiet origin main 2>&1; then
+    _scaffold_warn "Failed to pull latest skills. Using cached version."
+  fi
+fi
+
+mkdir -p .claude/skills
+
+_link_skill() {
+  local name="$1"
+  local skill_dir="$SKILLS_DIR/$name"
+  local link_path=".claude/skills/_${name}"
+
+  if ! echo "$name" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
+    _scaffold_warn "Skill '$name' has an invalid name (must match [a-z0-9][a-z0-9-]*) — skipping."
+    return
+  fi
+
+  if [ ! -d "$skill_dir" ]; then
+    _scaffold_warn "Skill '$name' not found in skills repo — skipping."
+    return
+  fi
+
+  if [ -d "$link_path" ] && [ ! -L "$link_path" ]; then
+    _scaffold_warn "Skill '$name': $link_path is a real directory — skipping to avoid data loss."
+    return
+  fi
+
+  if ln -sfn "$skill_dir" "$link_path" 2>/dev/null; then
+    _scaffold_log "Linked: $name"
+  else
+    _scaffold_err "Failed to link skill '$name'."
+  fi
+}
+
+LINK_ALL=1
+
+if [ -f "$SCAFFOLD_CONFIG" ]; then
+  skills=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$SCAFFOLD_CONFIG'))
+    names = d.get('skills', None)
+    if names is None:
+        sys.exit(2)
+    if not isinstance(names, list):
+        sys.exit(1)
+    print('\n'.join(str(n) for n in names))
+except Exception:
+    sys.exit(1)
+" 2>/dev/null)
+  parse_exit=$?
+  if [ "$parse_exit" -eq 0 ]; then
+    LINK_ALL=0
+  elif [ "$parse_exit" -eq 2 ]; then
+    _scaffold_warn "scaffold.json has no 'skills' key — linking all skills."
+  else
+    _scaffold_warn "Could not parse $SCAFFOLD_CONFIG — linking all skills."
+  fi
+fi
+
+if [ "$LINK_ALL" -eq 1 ]; then
+  for skill_dir in "$SKILLS_DIR"/*/; do
+    [ -d "$skill_dir" ] || continue
+    _link_skill "$(basename "$skill_dir")"
+  done
+else
+  while IFS= read -r name; do
+    [ -n "$name" ] && _link_skill "$name"
+  done <<< "$skills"
+fi
+
+mkdir -p .git/info
+grep -qxF '.claude/skills/_*/' .git/info/exclude 2>/dev/null \
+  || echo '.claude/skills/_*/' >> .git/info/exclude
+
+_scaffold_log "Done."

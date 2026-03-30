@@ -1,167 +1,54 @@
-# scaffold
+# Scaffold
 
-Manage AI context artifacts (PRDs, ADRs, tech plans) across an engineering organization. Skills are stored in a private S3 bucket and linked into repos on demand — never committed.
+Scaffold is an open-source platform for managing AI context artifacts — PRDs, ADRs, tech plans, design docs — across an engineering organization. It gives these artifacts a standard format and a shared home that is accessible to both humans and AI agents, without ever committing them to source repositories.
 
-> [!IMPORTANT]
-> Scaffold is experimental. APIs and formats may change.
+## How it works
 
----
-
-## Installation
-
-Build from source:
-
-```bash
-cargo build --release
-cp target/release/scaffold ~/.local/bin/
-```
-
----
-
-## Configuration
-
-All commands that access S3 require a bucket to be configured:
-
-```bash
-scaffold config set bucket my-org-scaffold-artifacts
-```
-
-Settings are stored in `~/.scaffold/settings.json`.
-
----
-
-## Commands
-
-### `scaffold new <name>`
-
-Create a new skill and push it to S3.
-
-```bash
-scaffold new payments
-scaffold new payments --description "Payment processing platform"
-scaffold new payments --minimal   # SKILL.md only, no reference files
-```
-
-### `scaffold pull [<name>]`
-
-Download skills from S3 into `~/.scaffold/`.
-
-```bash
-scaffold pull              # pull all skills in the bucket
-scaffold pull payments     # pull a specific skill
-```
-
-### `scaffold link [<name>]`
-
-Link a skill into the current working directory via symlink. The symlink is placed at `.claude/skills/<name>` and added to `.git/info/exclude` so it is never committed.
-
-```bash
-scaffold link payments     # link a specific skill
-scaffold link              # link all scopes from .scaffold-artifacts (see below)
-scaffold link --force      # replace existing symlinks
-```
-
-`scaffold link` without an argument reads `.scaffold-artifacts` from the current directory. Create this file manually to configure which skills are linked in a given repo:
-
-```yaml
-# .scaffold-artifacts
-scopes:
-  - payments
-  - platform
-```
-
-This is the only scaffold-related file that should be committed to a repository. Running `scaffold link` will link each listed scope and automatically resolve any `depends-on` dependencies declared in a skill's frontmatter.
-
-**Typical workflow for a new repo:**
-
-```bash
-# 1. Create .scaffold-artifacts listing the skills you want
-cat > .scaffold-artifacts << 'EOF'
-scopes:
-  - payments
-  - platform
-EOF
-
-# 2. Pull the skills from S3
-scaffold pull payments
-scaffold pull platform
-
-# 3. Link them into this repo
-scaffold link
-```
-
-### `scaffold list`
-
-List locally installed skills and their link status in the current directory.
-
-```bash
-scaffold list           # locally installed skills (~/.scaffold/)
-scaffold list --remote  # all skills available in S3
-```
-
-Output shows name, whether the skill is linked in the current directory, and description. Linked skills appear first.
-
-### `scaffold push [<name>]`
-
-Push local skill changes back to S3.
-
-```bash
-scaffold push              # push all locally modified skills
-scaffold push payments     # push a specific skill
-```
-
-### `scaffold edit <name>`
-
-Pull a skill from S3 and open it for editing.
-
-```bash
-scaffold edit payments
-```
-
-Opens the skill directory in `$VISUAL` or `$EDITOR`. Does not push automatically — run `scaffold push` when done.
-
-### `scaffold config`
-
-Get or set configuration values.
-
-```bash
-scaffold config get bucket
-scaffold config set bucket my-org-scaffold-artifacts
-```
-
----
-
-## Skill format
-
-Each skill is a directory in `~/.scaffold/<name>/`:
+Skills (the artifact format) live in a dedicated internal git repository. A CI job validates every push and syncs the result to S3. Engineers get skills distributed into their repos automatically via a git hook — no additional tooling or credentials required.
 
 ```
-payments/
-├── SKILL.md                    # frontmatter + executive summary
-├── references/
-│   ├── prd.md
-│   ├── tech-plan.md
-│   └── adrs/
-│       └── payment-processor-selection.md
-└── assets/
-    └── architecture-diagram.png
+Skills git repo → CI (validate + sync) → S3 bucket
+                                              ↓
+                                   git hook (post-merge)
+                                              ↓
+                               .claude/skills/_<name>/  (symlinked, gitignored)
 ```
 
-`SKILL.md` frontmatter:
+Three audiences interact with skills through distinct paths:
 
-```yaml
----
-name: payments
-description: >
-  Context for the payments platform. Use when working on payment
-  processing, billing, or any integration with payment providers.
-metadata:
-  type: project
-  status: active
-  scope: repo-payments, repo-billing
-  depends-on: platform
-  tags: payments, billing, fintech
----
+| Audience | Path |
+|---|---|
+| **Engineers** | Clone the skills repo; `git push` to publish. A `post-merge` hook in service repos distributes skills automatically on `git pull`. |
+| **PMs / Designers** | Edit via the GitHub web editor (v1) or a purpose-built web editor (v2). |
+| **Cloud agents** | Read directly from S3 using an IAM role. |
+
+## Repository layout
+
+```
+scaffold/
+├── hooks/
+│   └── post-merge        # Git hook for engineer skill distribution
+├── install.sh            # Hook installer for service repos
+├── terraform/
+│   ├── modules/
+│   │   ├── s3/           # S3 bucket module
+│   │   └── iam/          # IAM roles module
+│   └── examples/
+│       └── scaffold/     # Example root module
+└── docs/
+    ├── hook.md           # Hook reference
+    ├── skill-format.md   # Skill format reference
+    └── terraform.md      # Infrastructure reference
 ```
 
-The `depends-on` field causes `scaffold link` to automatically link the referenced skill as well.
+## Documentation
+
+- [Skills repository](docs/skills-repo.md) — layout of the skills git repo, CI setup, branch protection, contribution workflow
+- [Hook reference](docs/hook.md) — how the `post-merge` hook works, installation, and `scaffold.json`
+- [Skill format](docs/skill-format.md) — skill directory layout, `SKILL.md` frontmatter, naming rules
+- [Terraform modules](docs/terraform.md) — S3 and IAM module reference
+- [PRD](docs/prd.md) — full product requirements and architecture decisions
+
+## License
+
+MIT

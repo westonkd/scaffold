@@ -37,26 +37,27 @@ variable "name_prefix" {
   description = "Prefix for IAM role and policy names"
 }
 
-variable "cli_trusted_principal_arns" {
+variable "ci_trusted_principal_arns" {
   type        = list(string)
-  description = "IAM principal ARNs (users or roles) allowed to assume the CLI roles"
+  description = "IAM principal ARNs for CI (e.g. GitHub Actions runner role) — granted read/write S3 access"
+}
+
+variable "agent_trusted_principal_arns" {
+  type        = list(string)
+  default     = []
+  description = "IAM principal ARNs for cloud agents — granted read-only S3 access. When empty, the read-only role is not created."
 }
 
 variable "web_trusted_principal_arns" {
   type        = list(string)
-  description = "IAM principal ARNs allowed to assume the web app role"
-}
-
-variable "create_readonly_role" {
-  type        = bool
-  default     = false
-  description = "Set to true to also create the scaffold_cli_ro read-only role"
+  default     = []
+  description = "IAM principal ARNs for the web app backend — granted read-only S3 access. When empty, the web role is not created."
 }
 
 variable "kms_key_arn" {
   type        = string
   default     = null
-  description = "Optional KMS key ARN for SSE-KMS bucket encryption"
+  description = "Optional KMS key ARN for SSE-KMS bucket encryption. If null, SSE-S3 is used."
 }
 
 variable "max_session_duration" {
@@ -71,40 +72,10 @@ variable "tags" {
   description = "Tags applied to all resources"
 }
 
-variable "enable_apigw" {
-  type        = bool
-  default     = false
-  description = "Set to true to deploy the API Gateway with Lambda authorizer"
-}
-
-variable "jwks_uri" {
-  type        = string
-  default     = ""
-  description = "JWKS endpoint URI for JWT verification (required when enable_apigw = true)"
-}
-
-variable "jwt_issuer" {
-  type        = string
-  default     = ""
-  description = "Expected JWT issuer (required when enable_apigw = true)"
-}
-
-variable "jwt_audience" {
-  type        = string
-  default     = ""
-  description = "Expected JWT audience (required when enable_apigw = true)"
-}
-
-variable "vpn_cidr_blocks" {
-  type        = list(string)
-  default     = []
-  description = "IPv4 CIDR blocks permitted by the VPN check. Empty list disables VPN enforcement."
-}
-
 # The s3 module is called without allowed_role_arns here because the role ARNs
 # are not yet known — they are created by the iam module below. The bucket
-# policy is applied in this root module after both modules resolve, avoiding
-# the circular dependency.
+# policy is applied at root level after both modules resolve, avoiding the
+# circular dependency.
 module "s3" {
   source = "../../modules/s3"
 
@@ -118,39 +89,20 @@ module "iam" {
 
   bucket_arn                 = module.s3.bucket_arn
   name_prefix                = var.name_prefix
-  cli_trusted_principal_arns = var.cli_trusted_principal_arns
+  cli_trusted_principal_arns = var.ci_trusted_principal_arns
   web_trusted_principal_arns = var.web_trusted_principal_arns
-  create_readonly_role       = var.create_readonly_role
+  create_readonly_role       = length(var.agent_trusted_principal_arns) > 0
   kms_key_arn                = var.kms_key_arn
   max_session_duration       = var.max_session_duration
   tags                       = var.tags
 }
 
-module "apigw" {
-  count  = var.enable_apigw ? 1 : 0
-  source = "../../modules/apigw"
-
-  bucket_name     = module.s3.bucket_name
-  bucket_arn      = module.s3.bucket_arn
-  jwks_uri        = var.jwks_uri
-  jwt_issuer      = var.jwt_issuer
-  jwt_audience    = var.jwt_audience
-  vpn_cidr_blocks = var.vpn_cidr_blocks
-  name_prefix     = var.name_prefix
-  tags            = var.tags
-}
-
-# Bucket policy applied here (root level) so it can reference both the bucket
-# ARN from module.s3 and the role ARNs from module.iam without a cycle.
 locals {
-  allowed_role_arns = compact(concat(
-    [
-      module.iam.cli_rw_role_arn,
-      module.iam.cli_ro_role_arn,
-      module.iam.web_role_arn,
-    ],
-    var.enable_apigw ? [module.apigw[0].s3_proxy_role_arn] : [],
-  ))
+  allowed_role_arns = compact([
+    module.iam.cli_rw_role_arn,
+    module.iam.cli_ro_role_arn,
+    module.iam.web_role_arn,
+  ])
 }
 
 data "aws_iam_policy_document" "bucket_policy" {
@@ -163,11 +115,7 @@ data "aws_iam_policy_document" "bucket_policy" {
       identifiers = local.allowed_role_arns
     }
 
-    actions = [
-      "s3:ListBucket",
-      "s3:GetBucketLocation",
-    ]
-
+    actions   = ["s3:ListBucket", "s3:GetBucketLocation"]
     resources = [module.s3.bucket_arn]
   }
 
@@ -180,12 +128,7 @@ data "aws_iam_policy_document" "bucket_policy" {
       identifiers = local.allowed_role_arns
     }
 
-    actions = [
-      "s3:GetObject",
-      "s3:PutObject",
-      "s3:DeleteObject",
-    ]
-
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:PutObjectTagging", "s3:DeleteObject"]
     resources = ["${module.s3.bucket_arn}/*"]
   }
 }
@@ -205,18 +148,17 @@ output "bucket_arn" {
   value = module.s3.bucket_arn
 }
 
-output "cli_rw_role_arn" {
-  value = module.iam.cli_rw_role_arn
+output "ci_rw_role_arn" {
+  value       = module.iam.cli_rw_role_arn
+  description = "Assume this role in CI (GitHub Actions) to sync skills to S3"
 }
 
-output "cli_ro_role_arn" {
-  value = module.iam.cli_ro_role_arn
+output "agent_ro_role_arn" {
+  value       = module.iam.cli_ro_role_arn
+  description = "Assume this role in cloud agent compute environments for read-only S3 access"
 }
 
 output "web_role_arn" {
-  value = module.iam.web_role_arn
-}
-
-output "api_endpoint" {
-  value = var.enable_apigw ? module.apigw[0].api_endpoint : null
+  value       = module.iam.web_role_arn
+  description = "Assume this role in the web app backend for read-only S3 access"
 }
