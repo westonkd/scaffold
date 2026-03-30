@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 SETTINGS_FILE="$HOME/.scaffold/settings.json"
-SKILLS_DIR="$HOME/.scaffold/agent-skills"
+SKILLS_REPO_DIR="$HOME/.scaffold/agent-skills"
+SKILLS_DIR="$SKILLS_REPO_DIR/agent-skills"
 SCAFFOLD_CONFIG="scaffold.json"
 
 _scaffold_log()  { echo "[scaffold] $*"; }
@@ -40,13 +41,13 @@ fi
 
 _scaffold_log "Updating skills..."
 
-if [ ! -d "$SKILLS_DIR/.git" ]; then
-  if ! git clone "$SKILLS_REPO" "$SKILLS_DIR" 2>&1; then
+if [ ! -d "$SKILLS_REPO_DIR/.git" ]; then
+  if ! git clone "$SKILLS_REPO" "$SKILLS_REPO_DIR" 2>&1; then
     _scaffold_err "Failed to clone skills repo ($SKILLS_REPO). Skills not updated."
     exit 0
   fi
 else
-  if ! git -C "$SKILLS_DIR" pull --rebase --quiet origin main 2>&1; then
+  if ! git -C "$SKILLS_REPO_DIR" pull --rebase --quiet origin main 2>&1; then
     _scaffold_warn "Failed to pull latest skills. Using cached version."
   fi
 fi

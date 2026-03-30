@@ -76,7 +76,7 @@ Cross-cutting standards and org-wide ADRs live in a dedicated skill named `platf
 
 ## S3 storage layout
 
-The skills repo layout mirrors the S3 bucket layout exactly:
+CI syncs the `agent-skills/` subdirectory of the skills repo to the S3 bucket root. The bucket layout mirrors the contents of that directory exactly:
 
 ```
 s3://<bucket>/
@@ -94,7 +94,7 @@ s3://<bucket>/
         payment-processor-selection.md
 ```
 
-Each file within a skill is a separate S3 object. CI uses `s3 sync --delete` semantics so the bucket always mirrors the skills repo exactly.
+Each file within a skill is a separate S3 object. CI uses `s3 sync --delete` semantics so the bucket always mirrors `agent-skills/` in the skills repo exactly.
 
 ---
 

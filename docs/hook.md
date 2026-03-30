@@ -95,8 +95,8 @@ Symlinked skills land in `.claude/skills/` with a `_` prefix:
 
 ```
 .claude/skills/
-├── _platform/      → ~/.scaffold/agent-skills/platform/
-├── _payments/      → ~/.scaffold/agent-skills/payments/
+├── _platform/      → ~/.scaffold/agent-skills/agent-skills/platform/
+├── _payments/      → ~/.scaffold/agent-skills/agent-skills/payments/
 └── public-skill/   ← committed directly to the service repo (no prefix)
 ```
 
