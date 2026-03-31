@@ -56,7 +56,7 @@ mkdir -p .claude/skills
 
 _link_skill() {
   local name="$1"
-  local skill_dir="$SKILLS_DIR/$name"
+  local skill_dir="$SKILLS_DIR/plugins/$name/skills/$name"
   local link_path=".claude/skills/_${name}"
 
   if ! echo "$name" | grep -qE '^[a-z0-9][a-z0-9-]*$'; then
@@ -108,9 +108,9 @@ except Exception:
 fi
 
 if [ "$LINK_ALL" -eq 1 ]; then
-  for skill_dir in "$SKILLS_DIR"/*/; do
-    [ -d "$skill_dir" ] || continue
-    _link_skill "$(basename "$skill_dir")"
+  for plugin_dir in "$SKILLS_DIR/plugins"/*/; do
+    [ -d "$plugin_dir" ] || continue
+    _link_skill "$(basename "$plugin_dir")"
   done
 else
   while IFS= read -r name; do

@@ -119,7 +119,9 @@ This PRD represents a deliberate redesign of Scaffold. There is no backwards com
 | **Synced skills** | Skills distributed from S3 (the validated read-replica). These are internal-only, symlinked into `.claude/skills/` with a `_` prefix, and gitignored in the service repo. |
 | **Default skill** | A skill marked `metadata.default: true` in its `SKILL.md` frontmatter. Symlinked into every service repo automatically, regardless of what is declared in `scaffold.json`. Represents agent infrastructure knowledge that all repos need. |
 | `contribute-to-skills` skill | The canonical default skill. Teaches agents how to contribute changes back to the skills repo. Present in every repo without any configuration. |
-| **Utility skill** | A skill with `metadata.type: utility`. Provides agent infrastructure knowledge (e.g., how to use Scaffold itself) rather than domain-specific project context. |
+| **Utility skill** | A skill with `"category": "utility"` in its `plugin.json`. Provides agent infrastructure knowledge (e.g., how to use Scaffold itself) rather than domain-specific project context. |
+| **Plugin marketplace** | The skills git repo is structured as a Claude Code plugin marketplace. The `marketplace.json` at the repo root lists every project as an installable plugin. |
+| **Plugin** | Each project/skill is wrapped as a Claude Code plugin. The plugin contains the skill in its `skills/` directory and is described by a `plugin.json` manifest. |
 
 ---
 
@@ -135,47 +137,72 @@ All artifacts follow the Agent Skills format (`agentskills.io`). Skills are **no
 
 ### One Skill Per Project
 
-Each project is a single skill. Individual artifact types live as reference files within it:
+Each project is a single skill, wrapped in a Claude Code plugin. Individual artifact types live as reference files within the skill:
 
 ```
-payments/
-├── SKILL.md                          # Executive summary: what is this, key decisions, status
-├── references/
-│   ├── prd.md
-│   ├── tech-plan.md
-│   └── adrs/
-│       ├── payment-processor-selection.md
-│       └── retry-strategy.md
-└── assets/
-    └── architecture-diagram.png
+plugins/payments/                         # Plugin root
+├── .claude-plugin/
+│   └── plugin.json                       # Plugin manifest
+└── skills/
+    └── payments/                         # Skill root
+        ├── SKILL.md                      # Executive summary: what is this, key decisions, status
+        ├── references/
+        │   ├── prd.md
+        │   ├── tech-plan.md
+        │   └── adrs/
+        │       ├── payment-processor-selection.md
+        │       └── retry-strategy.md
+        └── assets/
+            └── architecture-diagram.png
 ```
 
 `SKILL.md` is a lean orientation doc. Detailed content lives in `references/`. Individual ADR files (not a single `adrs.md`) keep context granular so agents only load what they need.
 
 ### The Platform Skill
 
-Cross-cutting standards and org-wide ADRs live in a dedicated `platform` skill. To include it in a service repo, add `"platform"` to the `skills` array in `scaffold.json` (see [Git Hook: Engineer Setup](#git-hook-engineer-setup)).
+Cross-cutting standards and org-wide ADRs live in a dedicated `platform` plugin with `"category": "platform"` in its `plugin.json`. To include it in a service repo, add `"platform"` to the `skills` array in `scaffold.json` (see [Git Hook: Engineer Setup](#git-hook-engineer-setup)).
 
-### Skill Frontmatter
+### `SKILL.md` Frontmatter
+
+`SKILL.md` contains only what is needed for agent progressive disclosure. All rich metadata lives in `plugin.json`.
 
 ```yaml
 ---
-name: payments
 description: >
   Context for the payments platform. Use when working on payment processing,
   billing, or any integration with payment providers.
-metadata:
-  type: project            # project | platform | utility
-  default: false           # optional; omit = false; true = link to every repo regardless of scaffold.json
-  scope: repo-payments, repo-billing
-  status: active
-  tags: payments, billing, fintech
 ---
 ```
 
-The optional `default` field designates a skill as always-on (see [Default Skills](#default-skills)). It is omitted when false.
+| Field | Required | Description |
+|---|---|---|
+| `description` | Yes | One or two sentences loaded at agent startup — make it agent-useful. |
 
-The `tags` field is a comma-separated list of user-defined labels. Tags are mirrored as S3 object tags on `SKILL.md` at CI sync time (see [S3 Object Tags](#s3-object-tags)).
+### `plugin.json` Schema
+
+```json
+{
+  "name": "payments",
+  "description": "Context for the payments platform. Use when working on payment processing, billing, or any integration with payment providers.",
+  "version": "1.0.0",
+  "category": "project",
+  "status": "active",
+  "keywords": ["payments", "billing", "fintech"],
+  "scope": ["repo-payments", "repo-billing"],
+  "default": false
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `name` | Yes | Skill name. Must match `[a-z0-9][a-z0-9-]*`. Must equal the plugin directory name. |
+| `description` | Yes | Used in `_index.json` and marketplace listings. |
+| `version` | Yes | Semantic version string. |
+| `category` | Yes | `project` \| `platform` \| `utility` |
+| `status` | No | Default `active`. |
+| `keywords` | No | Array of strings. Mirrored as S3 object tags on `SKILL.md` at CI sync time. |
+| `scope` | No | Array of repo names this skill is relevant to. |
+| `default` | No | Boolean. If `true`, symlinked into every repo regardless of `scaffold.json`. Omit when false. |
 
 ### Skill Naming Rules
 
@@ -190,33 +217,68 @@ The `tags` field is a comma-separated list of user-defined labels. Tags are mirr
 
 The skills git repo is the source of truth for all skill artifacts. It is a dedicated, internal-only repository — never mirrored to public GitHub. All writes target this repo; S3 is populated exclusively from it via CI.
 
-### Repo Layout
+**The repo is structured as a Claude Code plugin marketplace.** Each project is a plugin in `plugins/`, and the root `marketplace.json` lists them all. Engineers install skills via `/plugin install payments@company-skills` using their existing Claude Code install — no bash hook or additional tooling required.
 
-The repo layout mirrors the S3 bucket layout exactly:
+### Repo Layout
 
 ```
 agent-skills/
-  platform/
-    SKILL.md
-    references/
-      ...
-  payments/
-    SKILL.md
-    references/
-      prd.md
-      tech-plan.md
-      adrs/
-        payment-processor-selection.md
+  .claude-plugin/
+    marketplace.json                  # Marketplace catalog — lists all plugins
+  plugins/
+    platform/
+      .claude-plugin/
+        plugin.json
+      skills/
+        platform/
+          SKILL.md
+          references/
+            ...
+    payments/
+      .claude-plugin/
+        plugin.json
+      skills/
+        payments/
+          SKILL.md
+          references/
+            prd.md
+            tech-plan.md
+            adrs/
+              payment-processor-selection.md
 ```
+
+The `marketplace.json` enumerates every project as an installable plugin using relative paths:
+
+```json
+{
+  "name": "company-skills",
+  "owner": { "name": "Your Org" },
+  "plugins": [
+    {
+      "name": "payments",
+      "source": "./plugins/payments",
+      "description": "Context for the payments platform..."
+    },
+    {
+      "name": "platform",
+      "source": "./plugins/platform",
+      "description": "Cross-cutting org-wide standards and ADRs"
+    }
+  ]
+}
+```
+
+The S3 bucket layout reflects the extracted skill structure (not the plugin wrapper), so cloud agents see the flat `<skill-name>/SKILL.md` hierarchy unchanged. CI extracts skills from `plugins/<name>/skills/<name>/` before syncing to S3.
 
 ### CI: Validate and Sync
 
 Every push to `main` triggers a CI job that:
 
-1. Validates each modified `SKILL.md`: frontmatter schema, required fields (`name`, `description`, `metadata.type`), `metadata.type` value must be one of `project | platform | utility`, skill name regex `[a-z0-9][a-z0-9-]*`, per-object size limit (default 1 MB)
-2. Runs secret and PII scanning (GitHub Advanced Security or equivalent)
-3. On pass: syncs the full skills tree to S3 (`s3 sync --delete` semantics) and rebuilds `_index.json` from scratch
-4. On fail: CI check fails, the push is flagged, S3 is untouched
+1. Validates `marketplace.json` and each `plugin.json`: required fields (`name`, `description`, `version`, `category`), `category` must be `project | platform | utility`, `name` must match `[a-z0-9][a-z0-9-]*` and equal the plugin directory name
+2. Validates each `SKILL.md`: frontmatter parseable, `description` field present, no individual file over 1 MB
+3. Runs secret and PII scanning (GitHub Advanced Security or equivalent)
+4. On pass: extracts skills from `plugins/<name>/skills/<name>/`, syncs the extracted tree to S3 (`s3 sync --delete` semantics), and rebuilds `_index.json` from scratch
+5. On fail: CI check fails, the push is flagged, S3 is untouched
 
 Because S3 is only written after CI passes, it is always clean. No quarantine, no staging prefix, no post-write remediation.
 
@@ -227,11 +289,23 @@ Because S3 is only written after CI passes, it is always clean. No quarantine, n
 Engineers work directly in the skills git repo:
 
 1. Clone `agent-skills` once
-2. Create or edit a skill directory
+2. Create or edit a plugin directory under `plugins/`; update `marketplace.json` if adding a new plugin
 3. `git commit -am "Update payments context" && git push`
 4. CI validates and syncs to S3 within 1–3 minutes
 
-No additional tooling, no AWS credentials, no proprietary binary.
+No AWS credentials, no proprietary binary.
+
+### Engineer Installation Flow
+
+Engineers add the skills marketplace once and install whichever projects they need:
+
+```
+/plugin marketplace add git@github.com:your-org/agent-skills.git
+/plugin install payments@company-skills
+/plugin install platform@company-skills
+```
+
+Skills are installed into `.claude/skills/` as symlinks with the `_` prefix (gitignored). The bash git hook remains supported as an alternative for repos that cannot adopt the plugin marketplace flow.
 
 ---
 
@@ -255,8 +329,8 @@ S3 is a validated read-replica. It is populated exclusively by the CI job that r
 
 | Tag key | Source | Example value |
 |---|---|---|
-| `Description` | `description` field from `SKILL.md` frontmatter | `"Context for the payments platform..."` |
-| `Tags` | `metadata.tags` from `SKILL.md` frontmatter (comma-separated) | `"payments,billing,fintech"` |
+| `Description` | `description` field from `plugin.json` | `"Context for the payments platform..."` |
+| `Tags` | `keywords` array from `plugin.json` (joined with commas) | `"payments,billing,fintech"` |
 
 These tags enable lightweight filtering and discovery directly in S3 (e.g., via `aws s3api get-object-tagging`) without needing to download and parse every `SKILL.md`.
 
@@ -309,7 +383,7 @@ Skills are discoverable by tag via a bucket-level manifest file, `_index.json`, 
 }
 ```
 
-The `tags` field is a JSON array normalized at sync time from the comma-separated `metadata.tags` value in `SKILL.md` frontmatter. The `default` field is omitted when false. `_index.json` is a reserved key; the `[a-z0-9][a-z0-9-]*` skill name validation rule prevents any skill from conflicting with it.
+The `tags` field is the `keywords` array from `plugin.json`, already a JSON array — no normalization step required. The `default` field is omitted when false. `_index.json` is a reserved key; the `[a-z0-9][a-z0-9-]*` skill name validation rule prevents any skill from conflicting with it.
 
 ### Design Decisions
 
@@ -317,12 +391,12 @@ The `tags` field is a JSON array normalized at sync time from the comma-separate
 |---|---|
 | S3 manifest, not DynamoDB | No new AWS services; self-hosting stays minimal; one GET serves any list or filter operation. DynamoDB is appropriate if scale reaches thousands of skills or multi-writer contention becomes measurable — neither condition exists today. |
 | Rebuilt from scratch by CI | Guarantees manifest is always consistent with actual bucket state. No partial updates, no missed entries. |
-| JSON array for tags | Normalized at sync time from the comma-separated frontmatter scalar. Makes client-side filtering trivial. |
+| JSON array for tags | Read directly from `plugin.json`'s `keywords` array — no normalization step required. Makes client-side filtering trivial. |
 | Per-skill `updated_at` | Allows browse UIs to sort by recency without fetching individual objects. |
 
 ### Write Path
 
-`_index.json` is written exclusively by the CI job. After syncing all skill objects to S3, CI rebuilds the manifest from scratch by reading the frontmatter of every `SKILL.md` in the repo. If the manifest write fails, CI retries. The manifest is eventually consistent with S3 on every successful CI run.
+`_index.json` is written exclusively by the CI job. After syncing all skill objects to S3, CI rebuilds the manifest from scratch by reading every `plugin.json` in the `plugins/` directory. If the manifest write fails, CI retries. The manifest is eventually consistent with S3 on every successful CI run.
 
 ### Read Path
 
@@ -486,28 +560,40 @@ Without this context, an agent may attempt to modify the symlinked path (changes
 ### Directory Layout
 
 ```
-contribute-to-skills/
-├── SKILL.md
-└── references/
-    └── workflow.md
+plugins/contribute-to-skills/
+├── .claude-plugin/
+│   └── plugin.json
+└── skills/
+    └── contribute-to-skills/
+        ├── SKILL.md
+        └── references/
+            └── workflow.md
 ```
 
 `SKILL.md` is the lean orientation doc. `references/workflow.md` contains the step-by-step contributing guide so agents load it only when they need it.
 
-### Frontmatter
+### `plugin.json`
+
+```json
+{
+  "name": "contribute-to-skills",
+  "description": "Instructions for contributing changes back to the agent-skills repository. Activate when you need to create, update, or push a skill — including adding context for the current project — to the organization's skills repo.",
+  "version": "1.0.0",
+  "category": "utility",
+  "default": true,
+  "status": "active",
+  "keywords": ["scaffold", "contributing", "meta"]
+}
+```
+
+### `SKILL.md` frontmatter
 
 ```yaml
 ---
-name: contribute-to-skills
 description: >
   Instructions for contributing changes back to the agent-skills repository.
   Activate when you need to create, update, or push a skill — including adding
   context for the current project — to the organization's skills repo.
-metadata:
-  type: utility
-  default: true
-  status: active
-  tags: scaffold, contributing, meta
 ---
 ```
 
@@ -576,9 +662,9 @@ The web app backend reads from S3 directly using its server-side IAM role — no
 
 **Create (new skill wizard)**
 1. Enter project name (validated and normalized per naming rules; error shown if name already exists)
-2. `SKILL.md` pre-filled with correct frontmatter template
+2. `plugin.json` pre-filled with name, description, version, and category; `SKILL.md` pre-filled with description frontmatter
 3. Optionally add reference files (PRD, tech plan, ADRs)
-4. Save → creates skill directory structure via a GitHub commit
+4. Save → creates the full plugin directory structure via a GitHub commit and registers it in `marketplace.json`
 
 **Utility actions**
 - **"Copy as Markdown"** button on every file — copies raw markdown to clipboard for pasting into any AI tool
@@ -624,7 +710,7 @@ Self-hosting is a first-class goal. Any organization should be able to run this 
 |---|---|
 | `s3` | Private bucket, versioning enabled, bucket policy |
 | `iam` | Read-only role (cloud agents + web app); CI write role (GitHub Actions → S3) |
-| `github` | Skills repo, branch protection on `main`, required CI status checks, auto-merge enabled, auto-delete head branches |
+| `github` | Skills repo (structured as a plugin marketplace), branch protection on `main`, required CI status checks, auto-merge enabled, auto-delete head branches |
 | `web` | Web editor deployment (ECS or k8s) — v2 only |
 
 Modules are independently deployable so organizations can adopt incrementally (e.g., `s3` + `iam` + `github` first, `web` later).
@@ -676,9 +762,9 @@ MIT license. Self-hosting is free for any organization. A hosted SaaS offering m
 |---|---|---|
 | 1 | GitHub skills repo + branch protection + CI skeleton | SOT established; engineers can push skills via git from day one |
 | 2 | CI: validate + sync to S3 + rebuild `_index.json` | S3 always clean; cloud agent access available immediately |
-| 3 | Bash git hook + installation tooling (npm postinstall / Makefile) | Zero-setup engineer distribution on `git pull` |
-| 4 | Skill template (starter directory + frontmatter) | Engineers can create new skills without a wizard |
-| 5 | v1 web editor: GitHub repo access for PMs + frontmatter template/comments | Non-engineer on-ramp with zero custom UI work |
+| 3 | Plugin marketplace structure (`marketplace.json` + per-plugin `plugin.json`) + bash git hook fallback | Engineers install via `/plugin install`; hook covers environments without Claude Code |
+| 4 | Skill template (starter plugin directory with `plugin.json` + `SKILL.md`) | Engineers can create new skills without a wizard |
+| 5 | v1 web editor: GitHub repo access for PMs + `plugin.json` / `SKILL.md` template/comments | Non-engineer on-ramp with zero custom UI work |
 | 6 | v2 web editor: browse + edit SPA (SAML, GitHub API write path, optimistic UI) | Purpose-built PM/designer experience |
 | 7 | v2 web editor: new skill wizard | Full no-code skill authoring |
 

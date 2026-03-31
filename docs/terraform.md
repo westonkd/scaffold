@@ -1,6 +1,50 @@
 # Terraform Reference
 
-Three reusable modules cover the core infrastructure. All are independently deployable.
+Four reusable modules cover the core infrastructure. All are independently deployable.
+
+---
+
+## `modules/github`
+
+Creates the skills GitHub repository with branch protection, required CI status checks, auto-merge, and auto-delete of merged branches.
+
+### Resources
+
+- `github_repository` — private skills repository with auto-merge and delete-branch-on-merge enabled (created only when `create_repository = true`)
+- `data.github_repository` — references an existing repository (used when `create_repository = false`)
+- `github_branch_protection` — protects `main`: requires CI status checks to pass, disallows force-pushes and deletions, enforces rules for admins
+
+### Variables
+
+| Name | Type | Required | Default | Description |
+|---|---|---|---|---|
+| `repository` | `string` | Yes | — | Name of the GitHub skills repository. |
+| `github_owner` | `string` | Yes | — | GitHub organization or user name. |
+| `create_repository` | `bool` | No | `true` | Whether to create the repository. Set to `false` to manage branch protection on an existing repo. |
+| `description` | `string` | No | `"Agent skills repository"` | Repository description. Used only when `create_repository = true`. |
+| `required_status_checks` | `list(string)` | No | `["validate-and-sync"]` | Status check context names required to pass before merge. Must match the `name` of the GitHub Actions job. |
+| `tags` | `map(string)` | No | `{}` | Map whose keys are applied as GitHub repository topics. |
+
+### Outputs
+
+| Name | Description |
+|---|---|
+| `repository_name` | Repository name |
+| `repository_full_name` | Full repository name (`owner/repo`) |
+| `ssh_clone_url` | SSH clone URL. Set as `skills_repo` in `~/.scaffold/settings.json` during onboarding. |
+| `html_url` | Web URL of the skills repository |
+
+### Provider configuration
+
+The module requires the `integrations/github` provider. Configure it in the root module:
+
+```hcl
+provider "github" {
+  owner = var.github_owner
+}
+```
+
+Set `GITHUB_TOKEN` in the environment before running `terraform apply`.
 
 ---
 
@@ -98,11 +142,18 @@ Creates IAM roles for the three principals that access the bucket.
 
 ## Example root module
 
-`terraform/examples/scaffold/` wires the two modules together into a deployable configuration. The bucket policy is applied at the root level (not inside `modules/s3`) to avoid a circular dependency between the S3 and IAM modules.
+`terraform/examples/scaffold/` wires all four modules together into a deployable configuration. The bucket policy is applied at the root level (not inside `modules/s3`) to avoid a circular dependency between the S3 and IAM modules.
 
 ### Usage
 
 ```hcl
+module "github" {
+  source       = "../../modules/github"
+  repository   = var.skills_repository_name
+  github_owner = var.github_owner
+  tags         = var.tags
+}
+
 module "github_oidc" {
   source = "../../modules/github-oidc"
   tags   = var.tags
@@ -150,13 +201,14 @@ tags = {
 
 ## Self-hosting checklist
 
-1. Create the GitHub Actions OIDC provider (`modules/github-oidc`) — once per AWS account
-2. Create an S3 bucket (`modules/s3`)
-3. Create IAM roles (`modules/iam`):
+1. Create the skills repository and branch protection (`modules/github`) — set `GITHUB_TOKEN` before applying
+2. Create the GitHub Actions OIDC provider (`modules/github-oidc`) — once per AWS account
+3. Create an S3 bucket (`modules/s3`)
+4. Create IAM roles (`modules/iam`):
    - `github_oidc_provider_arn` + `github_oidc_subjects` → CI (GitHub Actions) federated access
    - `agent_trusted_principal_arns` → your cloud agent compute role(s) (optional)
    - `web_trusted_principal_arns` → your web app backend role (v2 only, optional)
-4. Set the `ci_rw_role_arn` output as `CI_ROLE_ARN` in your skills repo's GitHub Actions secrets
-5. Configure the skills git repo with branch protection and required CI status checks (see [PRD](prd.md))
-6. Set up CI to validate and sync on every push to `main` (see [Skills Repository](skills-repo.md) — CI: validate and sync)
-7. Distribute `hooks/post-merge` to service repos via `install.sh` or a `postinstall` npm script
+5. Set the `ci_rw_role_arn` output as `CI_ROLE_ARN` in your skills repo's GitHub Actions secrets
+6. Add `ci/validate.py` and `ci/build-index.py` from this repo to your skills repo's `ci/` directory
+7. Set up CI to validate and sync on every push to `main` (see [Skills Repository](skills-repo.md) — CI: validate and sync)
+8. Engineer distribution: the skills repo is a Claude Code plugin marketplace — engineers run `/plugin marketplace add` + `/plugin install`. Distribute `hooks/post-merge` via `install.sh` or a `postinstall` npm script as a fallback for environments without Claude Code.

@@ -4,21 +4,23 @@ Scaffold is an open-source platform for managing AI context artifacts — PRDs, 
 
 ## How it works
 
-Skills (the artifact format) live in a dedicated internal git repository. A CI job validates every push and syncs the result to S3. Engineers get skills distributed into their repos automatically via a git hook — no additional tooling or credentials required.
+Skills (the artifact format) live in a dedicated internal git repository structured as a **Claude Code plugin marketplace**. Each project is a plugin; the repo root carries a `marketplace.json` listing every plugin. A CI job validates every push and syncs the extracted skills to S3. Engineers install skills via the Claude Code plugin system — no credentials or extra tooling required.
 
 ```
-Skills git repo → CI (validate + sync) → S3 bucket
-                                              ↓
-                                   git hook (post-merge)
-                                              ↓
-                               .claude/skills/_<name>/  (symlinked, gitignored)
+Skills git repo (plugin marketplace)
+        ↓ git push
+CI: validate plugin.json + SKILL.md → extract skills → sync to S3 → rebuild _index.json
+                                                                           ↓
+                                                          /plugin install <name>@company-skills
+                                                                           ↓
+                                                   .claude/skills/_<name>/  (symlinked, gitignored)
 ```
 
 Three audiences interact with skills through distinct paths:
 
 | Audience | Path |
 |---|---|
-| **Engineers** | Clone the skills repo; `git push` to publish. A `post-merge` hook in service repos distributes skills automatically on `git pull`. |
+| **Engineers** | Clone the skills repo; `git push` to publish. Install skills with `/plugin install` via Claude Code; a `post-merge` bash hook is available as a fallback. |
 | **PMs / Designers** | Edit via the GitHub web editor (v1) or a purpose-built web editor (v2). |
 | **Cloud agents** | Read directly from S3 using an IAM role. |
 

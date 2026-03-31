@@ -18,6 +18,8 @@ On every `post-merge` in a service repo:
 
 The hook never uses `set -e`. Every error is logged and the hook exits 0 so it never interrupts a `git pull`.
 
+> **Primary distribution path:** For engineers with Claude Code installed, the preferred path is the plugin marketplace — add the marketplace once with `/plugin marketplace add` and install individual skills with `/plugin install`. The bash hook is the fallback for repos or environments where the plugin flow is unavailable.
+
 ---
 
 ## Installation
@@ -95,8 +97,8 @@ Symlinked skills land in `.claude/skills/` with a `_` prefix:
 
 ```
 .claude/skills/
-├── _platform/      → ~/.scaffold/agent-skills/agent-skills/platform/
-├── _payments/      → ~/.scaffold/agent-skills/agent-skills/payments/
+├── _platform/      → ~/.scaffold/agent-skills/agent-skills/plugins/platform/skills/platform/
+├── _payments/      → ~/.scaffold/agent-skills/agent-skills/plugins/payments/skills/payments/
 └── public-skill/   ← committed directly to the service repo (no prefix)
 ```
 

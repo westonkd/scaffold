@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 5.0"
     }
+    github = {
+      source  = "integrations/github"
+      version = ">= 6.0"
+    }
   }
 
   # Uncomment and configure to store state remotely:
@@ -18,6 +22,10 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+}
+
+provider "github" {
+  owner = var.github_owner
 }
 
 variable "aws_region" {
@@ -72,10 +80,36 @@ variable "max_session_duration" {
   description = "Maximum session duration in seconds for assumed roles (900–43200)"
 }
 
+variable "github_owner" {
+  type        = string
+  description = "GitHub organization or user name that owns the skills repository"
+}
+
+variable "skills_repository_name" {
+  type        = string
+  default     = "agent-skills"
+  description = "Name of the GitHub skills repository"
+}
+
+variable "create_skills_repository" {
+  type        = bool
+  default     = true
+  description = "Whether to create the skills repository. Set to false if the repository already exists."
+}
+
 variable "tags" {
   type        = map(string)
   default     = {}
   description = "Tags applied to all resources"
+}
+
+module "github" {
+  source = "../../modules/github"
+
+  repository        = var.skills_repository_name
+  github_owner      = var.github_owner
+  create_repository = var.create_skills_repository
+  tags              = var.tags
 }
 
 module "github_oidc" {
@@ -174,4 +208,14 @@ output "agent_ro_role_arn" {
 output "web_role_arn" {
   value       = module.iam.web_role_arn
   description = "Assume this role in the web app backend for read-only S3 access"
+}
+
+output "skills_repository_ssh_url" {
+  value       = module.github.ssh_clone_url
+  description = "SSH clone URL for the skills repository. Set as skills_repo in ~/.scaffold/settings.json."
+}
+
+output "skills_repository_html_url" {
+  value       = module.github.html_url
+  description = "Web URL of the skills repository"
 }

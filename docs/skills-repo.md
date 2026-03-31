@@ -2,33 +2,40 @@
 
 The skills git repository is the source of truth for all skill artifacts. It is a dedicated, internal-only repository — never mirrored to a public GitHub. All writes (engineer pushes, web editor commits) target this repo. CI validates every push to `main` and syncs the result to S3.
 
+The repo is structured as a **Claude Code plugin marketplace**. Each project is a plugin under `plugins/`, and `agent-skills/.claude-plugin/marketplace.json` lists every plugin.
+
 ---
 
 ## Repository layout
 
-Skills live under the `agent-skills/` subdirectory. The S3 bucket layout mirrors the contents of that directory exactly.
-
 ```
 agent-skills-repo/
 ├── agent-skills/
-│   ├── platform/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── coding-standards.md
-│   │       └── adrs/
-│   │           └── monorepo-strategy.md
-│   ├── payments/
-│   │   ├── SKILL.md
-│   │   └── references/
-│   │       ├── prd.md
-│   │       ├── tech-plan.md
-│   │       └── adrs/
-│   │           ├── payment-processor-selection.md
-│   │           └── retry-strategy.md
-│   └── billing/
-│       ├── SKILL.md
-│       └── references/
-│           └── prd.md
+│   ├── .claude-plugin/
+│   │   └── marketplace.json          ← marketplace catalog
+│   └── plugins/
+│       ├── platform/
+│       │   ├── .claude-plugin/
+│       │   │   └── plugin.json
+│       │   └── skills/
+│       │       └── platform/
+│       │           ├── SKILL.md
+│       │           └── references/
+│       │               ├── coding-standards.md
+│       │               └── adrs/
+│       │                   └── monorepo-strategy.md
+│       └── payments/
+│           ├── .claude-plugin/
+│           │   └── plugin.json
+│           └── skills/
+│               └── payments/
+│                   ├── SKILL.md
+│                   └── references/
+│                       ├── prd.md
+│                       ├── tech-plan.md
+│                       └── adrs/
+│                           ├── payment-processor-selection.md
+│                           └── retry-strategy.md
 └── ci/
     ├── validate.py
     └── build-index.py
@@ -40,31 +47,66 @@ agent-skills-repo/
 
 ## Creating a skill
 
-1. Create a directory matching the skill name (`[a-z0-9][a-z0-9-]*`)
-2. Add `SKILL.md` with valid frontmatter (see [Skill Format](skill-format.md))
-3. Optionally add reference files under `references/` and assets under `assets/`
-4. Commit and push to `main`
+1. Create the plugin directory structure:
 
 ```bash
-mkdir agent-skills/payments
-cat > agent-skills/payments/SKILL.md << 'EOF'
+mkdir -p agent-skills/plugins/payments/.claude-plugin
+mkdir -p agent-skills/plugins/payments/skills/payments/references
+```
+
+2. Create `plugin.json` — this is where all skill metadata lives:
+
+```bash
+cat > agent-skills/plugins/payments/.claude-plugin/plugin.json << 'EOF'
+{
+  "name": "payments",
+  "description": "Context for the payments platform. Use when working on payment processing, billing, or any integration with payment providers.",
+  "version": "1.0.0",
+  "category": "project",
+  "status": "active",
+  "keywords": ["payments", "billing"],
+  "scope": ["repo-payments", "repo-billing"]
+}
+EOF
+```
+
+3. Create `SKILL.md` — lean orientation doc for agent progressive disclosure:
+
+```bash
+cat > agent-skills/plugins/payments/skills/payments/SKILL.md << 'EOF'
 ---
-name: payments
 description: >
   Context for the payments platform. Use when working on payment processing,
   billing, or any integration with payment providers.
-metadata:
-  type: project
-  status: active
-  tags: payments, billing
 ---
 
 # Payments
 
 Executive summary of the payments platform...
 EOF
+```
 
-git add agent-skills/payments/
+4. Register the plugin in `marketplace.json`:
+
+```json
+{
+  "name": "company-skills",
+  "owner": { "name": "Your Org" },
+  "plugins": [
+    {
+      "name": "payments",
+      "source": "./plugins/payments",
+      "description": "Context for the payments platform..."
+    }
+  ]
+}
+```
+
+5. Commit and push:
+
+```bash
+git add agent-skills/plugins/payments/
+git add agent-skills/.claude-plugin/marketplace.json
 git commit -m "Add payments skill"
 git push
 ```
@@ -77,16 +119,11 @@ CI validates the push and syncs to S3 within 1–3 minutes.
 
 Every push to `main` must trigger a CI job that:
 
-1. **Validates** each modified `SKILL.md`:
-   - Frontmatter parses as valid YAML
-   - Required fields present: `name`, `description`, `metadata.type`
-   - `name` matches `[a-z0-9][a-z0-9-]*`
-   - No individual file exceeds the size limit (default: 1 MB)
-2. **Scans** for secrets and PII (GitHub Advanced Security or equivalent)
-3. **On pass:** syncs the full skills tree to S3 with `s3 sync --delete` semantics, then rebuilds `_index.json` from scratch by reading every `SKILL.md`
-4. **On fail:** CI check fails, S3 is untouched
-
-Because S3 is only written after CI passes, it is always in a validated state. No quarantine, no staging prefix.
+1. **Validates** `marketplace.json` and each `plugin.json`: required fields, correct types, consistency between manifest and plugin directories
+2. **Validates** each `SKILL.md`: frontmatter parseable, `description` field present, no individual file over 1 MB
+3. **Scans** for secrets and PII (GitHub Advanced Security or equivalent)
+4. **On pass:** extracts skills from the plugin structure, syncs the flat skill tree to S3 with `s3 sync --delete` semantics, then rebuilds `_index.json` from scratch by reading every `plugin.json`
+5. **On fail:** CI check fails, S3 is untouched
 
 ### Minimal GitHub Actions example
 
@@ -105,7 +142,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate SKILL.md files
+      - name: Validate plugin structure
         run: |
           python3 ci/validate.py
 
@@ -115,9 +152,18 @@ jobs:
           role-to-assume: ${{ secrets.CI_ROLE_ARN }}
           aws-region: us-west-2
 
+      - name: Extract skills from plugin structure
+        run: |
+          mkdir -p /tmp/skills-sync
+          for plugin_dir in agent-skills/plugins/*/; do
+            name=$(basename "$plugin_dir")
+            skill_dir="$plugin_dir/skills/$name"
+            [ -d "$skill_dir" ] && cp -r "$skill_dir" "/tmp/skills-sync/$name"
+          done
+
       - name: Sync to S3
         run: |
-          aws s3 sync agent-skills/ s3://${{ secrets.BUCKET_NAME }} \
+          aws s3 sync /tmp/skills-sync/ s3://${{ secrets.BUCKET_NAME }} \
             --delete
 
       - name: Rebuild index
@@ -146,6 +192,24 @@ For the v2 web editor's auto-merge write path, also enable:
 
 ---
 
+## Engineer distribution
+
+### Plugin marketplace (primary)
+
+Engineers with Claude Code add the skills marketplace once and install the projects they need:
+
+```
+/plugin marketplace add git@github.com:your-org/agent-skills.git
+/plugin install payments@company-skills
+/plugin install platform@company-skills
+```
+
+### Git hook (fallback)
+
+For repos or environments where the plugin marketplace flow isn't available, the `post-merge` bash hook clones the skills repo and symlinks selected skills into `.claude/skills/`. See [Hook Reference](hook.md).
+
+---
+
 ## Engineer contribution workflow
 
 Engineers work directly in the skills git repo:
@@ -156,7 +220,7 @@ git clone git@github.com:your-org/agent-skills.git
 cd agent-skills
 
 # Create or edit a skill
-mkdir -p agent-skills/payments/references
+mkdir -p agent-skills/plugins/payments/skills/payments/references
 # ... edit files ...
 
 # Publish
@@ -164,12 +228,14 @@ git commit -am "Update payments context"
 git push
 ```
 
-CI validates and syncs to S3 within 1–3 minutes. Service repos pick up the change on the next `git pull` via the `post-merge` hook.
+CI validates and syncs to S3 within 1–3 minutes. Service repos using the git hook pick up the change on the next `git pull`.
 
 ---
 
 ## Removing a skill
 
-Delete the skill's directory from the repo and push. `s3 sync --delete` removes the corresponding S3 objects on the next CI run.
+1. Delete the plugin's directory from `plugins/`
+2. Remove its entry from `marketplace.json`
+3. Commit and push
 
-Recovery is available via git history (`git log`, `git checkout`) and S3 versioning.
+`s3 sync --delete` removes the corresponding S3 objects on the next CI run. Recovery is available via git history (`git log`, `git checkout`) and S3 versioning.
